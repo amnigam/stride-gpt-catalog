@@ -1,0 +1,18 @@
+- id: MOB-STORE-001
+  title: Secure local storage
+  intent: Sensitive data on device uses the platform keystore, never plaintext.
+  layers: [platform.mobile]
+  stride: [InformationDisclosure]
+  assessment_signal: Is on-device sensitive data stored in the secure keystore/keychain?
+  threat_frameworks: [{framework: owasp_masvs, ref: "MASVS-STORAGE", version: "2.x"}]
+  detect_keywords: [keychain, keystore, secure storage, encrypted shared prefs]
+
+- id: MOB-PIN-001
+  title: Certificate pinning
+  intent: The app pins server certificates to resist MITM.
+  layers: [platform.mobile]
+  stride: [Spoofing, Tampering]
+  default_expectation: recommended
+  assessment_signal: Does the app pin the server certificate/public key?
+  threat_frameworks: [{framework: owasp_masvs, ref: "MASVS-NETWORK", version: "2.x"}]
+  detect_keywords: [certificate pinning, cert pinning, public key pinning]

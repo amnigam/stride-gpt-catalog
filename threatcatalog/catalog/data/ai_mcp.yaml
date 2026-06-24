@@ -1,0 +1,35 @@
+# MCP layer — OWASP MCP Top 10 (BETA; pin version, expect drift).
+- id: MCP-TRUST-001
+  title: MCP server provenance / trust verification
+  intent: Only verified, provenance-checked MCP servers are connected.
+  layers: [ai.mcp]
+  stride: [Spoofing, Tampering]
+  assessment_signal: Are connected MCP servers verified for provenance/trust before use?
+  threat_frameworks: [{framework: owasp_mcp, ref: "MCP01:2025", version: "beta-phase3"}]
+  detect_keywords: [mcp server verification, trusted mcp, server provenance]
+
+- id: MCP-TOKEN-001
+  title: No token passthrough; scoped credentials
+  intent: Per-server scoped credentials are used; tokens are not passed through.
+  layers: [ai.mcp]
+  stride: [ElevationOfPrivilege, InformationDisclosure]
+  assessment_signal: Are MCP credentials scoped per-server with no token passthrough?
+  threat_frameworks: [{framework: owasp_mcp, ref: "MCP05:2025", version: "beta-phase3"}]
+  detect_keywords: [token passthrough, scoped token, per-server credential]
+
+- id: MCP-DESC-001
+  title: Tool-description injection defense
+  intent: Tool descriptions/metadata are sanitized to resist tool poisoning.
+  layers: [ai.mcp]
+  stride: [Tampering]
+  assessment_signal: Are MCP tool descriptions/metadata sanitized against injection (tool poisoning)?
+  threat_frameworks: [{framework: owasp_mcp, ref: "MCP03:2025", version: "beta-phase3"}]
+  detect_keywords: [tool description injection, tool poisoning, metadata sanitization]
+
+- id: MCP-LOG-001
+  title: MCP call audit logging
+  intent: MCP tool calls are logged for audit.
+  layers: [ai.mcp]
+  stride: [Repudiation]
+  assessment_signal: Are MCP tool calls logged to the audit pipeline?
+  detect_keywords: [mcp logging, mcp audit]

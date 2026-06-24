@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="Arial, Helvetica, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#94a3b8"/></marker></defs>
+<rect x="0" y="0" width="1280" height="640" fill="#ffffff"/>
+<text x="40" y="44" font-size="24" font-weight="700" fill="#1f2937">PeopleDesk — internal HR web app (test subject)</text>
+<text x="40" y="70" font-size="14" fill="#6b7280">Facets: web + cloud, AI capability = LLM-integrated · Data classification: Restricted (employee PII) · Cardholder data: none</text>
+
+<rect x="30" y="100" width="250" height="470" rx="14" fill="none" stroke="#b6c0cf" stroke-width="2" stroke-dasharray="8 6"/><text x="44" y="122" font-size="14" font-weight="600" fill="#6b7280">Public Internet</text>
+<rect x="310" y="100" width="640" height="470" rx="14" fill="none" stroke="#b6c0cf" stroke-width="2" stroke-dasharray="8 6"/><text x="324" y="122" font-size="14" font-weight="600" fill="#6b7280">AWS VPC — PeopleDesk</text>
+<rect x="980" y="100" width="270" height="470" rx="14" fill="none" stroke="#b6c0cf" stroke-width="2" stroke-dasharray="8 6"/><text x="994" y="122" font-size="14" font-weight="600" fill="#6b7280">External LLM provider</text>
+
+<rect x="70" y="250" width="170" height="70" rx="9" fill="#64748b"/><text x="155" y="279.4" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">HR staff</text><text x="155" y="300.4" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">browser</text>
+<rect x="70" y="380" width="170" height="64" rx="9" fill="#7c6fd6"/><text x="155" y="406.88" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">Okta SSO</text><text x="155" y="426.08" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">identity provider</text>
+
+<rect x="350" y="170" width="150" height="60" rx="9" fill="#64748b"/><text x="425" y="203.6" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">WAF</text>
+<rect x="540" y="170" width="150" height="60" rx="9" fill="#64748b"/><text x="615" y="195.2" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">ALB</text><text x="615" y="213.2" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">TLS termination</text>
+<rect x="440" y="300" width="230" height="78" rx="9" fill="#3b6fd4"/><text x="555" y="332.76" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">PeopleDesk web app</text><text x="555" y="356.15999999999997" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">Flask · session + RBAC</text>
+<rect x="360" y="440" width="180" height="64" rx="9" fill="#0f9d8f"/><text x="450" y="466.88" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">Employee DB</text><text x="450" y="486.08" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">encrypted at rest</text>
+<rect x="600" y="440" width="230" height="70" rx="9" fill="#3b6fd4"/><text x="715" y="469.4" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">LLM summarizer</text><text x="715" y="490.4" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">builds prompt from records</text>
+
+<rect x="1010" y="300" width="210" height="78" rx="9" fill="#e0824f"/><text x="1115" y="332.76" font-size="17" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">LLM API endpoint</text><text x="1115" y="356.15999999999997" font-size="13" fill="#eef2fb" text-anchor="middle" dominant-baseline="middle">summarization</text>
+
+<line x1="240" y1="280" x2="350" y2="200" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" /><text x="300" y="232" font-size="13" fill="#6b7280" text-anchor="middle">TLS 1.3</text>
+<line x1="425" y1="200" x2="540" y2="200" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" />
+<line x1="615" y1="230" x2="600" y2="300" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" />
+<line x1="155" y1="380" x2="200" y2="330" stroke="#7c6fd6" stroke-width="2.5" marker-end="url(#a)" /><text x="120" y="360" font-size="13" fill="#6b7280" text-anchor="middle">authn</text>
+<line x1="500" y1="378" x2="460" y2="440" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" /><text x="455" y="415" font-size="13" fill="#6b7280" text-anchor="middle">read</text>
+<line x1="630" y1="378" x2="700" y2="440" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" />
+<line x1="540" y1="472" x2="600" y2="474" stroke="#0f9d8f" stroke-width="2.5" marker-end="url(#a)" /><text x="570" y="428" font-size="13" fill="#6b7280" text-anchor="middle">records (Restricted PII)</text>
+<line x1="830" y1="340" x2="1010" y2="340" stroke="#e0824f" stroke-width="2.5" marker-end="url(#a)" /><text x="920" y="326" font-size="13" fill="#6b7280" text-anchor="middle">prompt incl. PII</text>
+<line x1="1010" y1="360" x2="830" y2="360" stroke="#94a3b8" stroke-width="2.5" marker-end="url(#a)" stroke-dasharray="6 5"/><text x="920" y="392" font-size="13" fill="#6b7280" text-anchor="middle">summary</text>
+
+<text x="40" y="608" font-size="13" fill="#6b7280">Highlighted flow: employee records (Restricted PII) are sent to an external model to be summarized — the egress that the AI-layer controls exist to govern.</text>
+</svg>

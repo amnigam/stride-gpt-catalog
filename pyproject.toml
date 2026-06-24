@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threatcatalog"
+version = "0.1.0"
+description = "Catalog-driven, gap-based threat modeling engine (STRIDE-GPT fork enhancement)"
+requires-python = ">=3.10"
+dependencies = ["pydantic>=2.5", "PyYAML>=6.0"]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.39"]
+openai = ["openai>=1.30"]
+app = ["streamlit>=1.30"]
+pdf = ["reportlab>=4.0"]
+dev = ["pytest>=7.4", "reportlab>=4.0"]
+
+[project.scripts]
+threatcatalog = "threatcatalog.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["threatcatalog*"]
+
+[tool.setuptools.package-data]
+"threatcatalog.catalog" = ["data/*.yaml"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

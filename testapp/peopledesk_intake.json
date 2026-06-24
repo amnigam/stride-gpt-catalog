@@ -1,0 +1,21 @@
+{
+  "profile": {
+    "name": "PeopleDesk",
+    "platforms": ["web", "cloud"],
+    "ai_capabilities": ["llm"],
+    "data_classification": "Restricted",
+    "handles_cardholder_data": false
+  },
+  "description": "PeopleDesk is an internal HR web application deployed on AWS. Staff sign in through Okta SSO. The employee database is encrypted at rest and all traffic uses TLS 1.3. A WAF fronts the application. An LLM feature summarizes an employee's records on request.",
+  "declared": [
+    {"control_id": "AI-PI-001",   "status": "not_present", "provenance": "declared", "confidence": "high"},
+    {"control_id": "AI-ENDP-001", "status": "not_present", "provenance": "declared", "confidence": "high"},
+    {"control_id": "AI-OUT-001",  "status": "not_present", "provenance": "declared", "confidence": "high"},
+    {"control_id": "AI-RATE-001", "status": "not_present", "provenance": "declared", "confidence": "high"},
+    {"control_id": "AI-LOG-001",  "status": "not_present", "provenance": "declared", "confidence": "high"},
+    {"control_id": "AI-AUTHZ-001","status": "partial",     "provenance": "declared", "confidence": "high"}
+  ],
+  "observed_unmatched": [
+    {"name": "PII display tokenization", "description": "masks identifiers on screen after the model call", "evidence": "declared by architect"}
+  ]
+}

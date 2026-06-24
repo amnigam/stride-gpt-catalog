@@ -1,0 +1,36 @@
+# Agentic layer — OWASP Top 10 for Agentic Applications 2026 (ASI).
+- id: ASI-MEM-001
+  title: Agent memory isolation
+  intent: Agent memory is isolated per tenant/session and resistant to poisoning.
+  layers: [ai.agentic]
+  stride: [Tampering]
+  assessment_signal: Is agent memory isolated per tenant/session and protected from poisoning?
+  threat_frameworks: [{framework: owasp_asi, ref: "ASI02:2026", version: "2026"}]
+  detect_keywords: [memory isolation, memory poisoning, per-tenant memory]
+
+- id: ASI-HITL-001
+  title: Human-in-the-loop on high-risk actions
+  intent: High-impact actions require human approval.
+  layers: [ai.agentic]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Do high-risk agent actions require human approval (HITL)?
+  threat_frameworks: [{framework: owasp_asi, ref: "ASI06:2026", version: "2026"}]
+  detect_keywords: [human in the loop, human approval, approval gate, hitl]
+
+- id: ASI-LOOP-001
+  title: Goal/loop bounds
+  intent: Agent loops are bounded to contain runaway behaviour and cost.
+  layers: [ai.agentic]
+  stride: [DenialOfService]
+  assessment_signal: Are agent iteration/goal loops bounded to contain runaway behaviour?
+  threat_frameworks: [{framework: owasp_asi, ref: "ASI08:2026", version: "2026"}]
+  detect_keywords: [loop bound, max iterations, runaway, step limit]
+
+- id: ASI-MULTI-001
+  title: Multi-agent compromise containment
+  intent: One compromised agent cannot cascade across the system.
+  layers: [ai.agentic]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Is a compromised agent contained from cascading across other agents?
+  threat_frameworks: [{framework: owasp_asi, ref: "ASI09:2026", version: "2026"}]
+  detect_keywords: [agent isolation, multi-agent containment, blast radius]

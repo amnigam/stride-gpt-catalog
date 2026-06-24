@@ -1,0 +1,28 @@
+# LLM-with-tools layer — adds tool/function autonomy risks.
+- id: AI-TOOL-001
+  title: Tool invocation allow-list
+  intent: The model may only call an explicit allow-list of tools/functions.
+  layers: [ai.llm_tools]
+  stride: [Tampering, ElevationOfPrivilege]
+  assessment_signal: Is there an enforced allow-list of tools/functions the model may invoke?
+  threat_frameworks:
+    - {framework: owasp_llm, ref: "LLM06:2025", version: "2025"}
+    - {framework: owasp_asi, ref: "ASI04:2026", version: "2026"}
+  detect_keywords: [tool allow-list, allowlist tools, function allowlist]
+
+- id: AI-TOOL-002
+  title: Tool output validation
+  intent: Output returned from tools is treated as untrusted and validated.
+  layers: [ai.llm_tools]
+  stride: [Tampering]
+  assessment_signal: Is tool/function output validated and treated as untrusted input?
+  detect_keywords: [tool output validation, validate tool result]
+
+- id: AI-AGENCY-001
+  title: Excessive-agency limits
+  intent: Tools run with scoped permissions; high-impact actions are constrained.
+  layers: [ai.llm_tools]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Do tools run with scoped permissions that limit excessive agency?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM06:2025", version: "2025"}]
+  detect_keywords: [scoped permissions, limited agency, constrained tools]

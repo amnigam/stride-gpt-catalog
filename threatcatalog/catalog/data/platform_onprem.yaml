@@ -1,0 +1,17 @@
+- id: ONP-FW-001
+  title: Network firewall
+  intent: A perimeter/internal firewall controls traffic between zones.
+  layers: [platform.onprem]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Is a firewall enforcing controlled traffic between network zones?
+  pci: [{requirement: "1.4.1"}]
+  detect_keywords: [firewall, perimeter firewall, network zones]
+
+- id: ONP-HARD-001
+  title: Host hardening (CIS benchmark)
+  intent: Servers are hardened to a recognized benchmark.
+  layers: [platform.onprem]
+  stride: [ElevationOfPrivilege]
+  default_expectation: recommended
+  assessment_signal: Are hosts hardened to a CIS (or equivalent) benchmark?
+  detect_keywords: [hardening, cis benchmark, stig, baseline image]

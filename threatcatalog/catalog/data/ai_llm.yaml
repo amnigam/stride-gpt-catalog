@@ -1,0 +1,61 @@
+# AI / LLM-integrated layer — OWASP Top 10 for LLM Applications 2025.
+- id: AI-PI-001
+  title: Prompt-injection defense
+  intent: Untrusted text (user fields, retrieved records, tool output) is treated as data, not instructions.
+  layers: [ai.llm]
+  stride: [Tampering]
+  assessment_signal: Is untrusted text delimited/labelled as data-not-instructions before reaching the model?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM01:2025", version: "2025"}]
+  detect_keywords: [prompt injection, input labeling, delimiter, instruction defense]
+
+- id: AI-DM-001
+  title: Data minimization before model call
+  intent: Only the fields needed for the task leave the trust boundary to the model.
+  layers: [ai.llm]
+  stride: [InformationDisclosure]
+  assessment_signal: Is the payload minimized so only necessary fields are sent to the model?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM02:2025", version: "2025"}]
+  detect_keywords: [data minimization, field filtering, redaction before, minimize payload]
+
+- id: AI-ENDP-001
+  title: No-retention / enterprise model endpoint
+  intent: The model endpoint does not retain prompts; provider due diligence is done.
+  layers: [ai.llm]
+  stride: [InformationDisclosure]
+  assessment_signal: Does the model call go to a no-retention/enterprise endpoint with provider due diligence?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM03:2025", version: "2025"}]
+  detect_keywords: [no retention, zero data retention, enterprise endpoint, private endpoint, dedicated capacity]
+
+- id: AI-OUT-001
+  title: Output filtering for sensitive disclosure
+  intent: Model output is filtered against the viewer's clearance before being returned.
+  layers: [ai.llm]
+  stride: [InformationDisclosure]
+  assessment_signal: Is model output filtered for sensitive data against the requesting user's clearance?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM02:2025", version: "2025"}]
+  detect_keywords: [output filtering, response filtering, disclosure filter]
+
+- id: AI-AUTHZ-001
+  title: Authorization scoping on AI features
+  intent: AI features enforce the same per-record authorization as the rest of the app.
+  layers: [ai.llm]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Is invocation of the AI feature authorized per-record/per-tenant server-side?
+  detect_keywords: [authorization scoping, per-record authorization, server-side authz]
+
+- id: AI-LOG-001
+  title: LLM prompt/response logging
+  intent: Prompts and responses are logged for audit and incident reconstruction.
+  layers: [ai.llm]
+  stride: [Repudiation]
+  assessment_signal: Are model prompts and responses logged to the audit pipeline?
+  detect_keywords: [llm logging, prompt logging, model audit log]
+
+- id: AI-RATE-001
+  title: Rate / spend limits on model endpoint
+  intent: Per-user and global limits cap model cost and abuse.
+  layers: [ai.llm]
+  stride: [DenialOfService]
+  assessment_signal: Are rate and token/spend limits enforced on the model endpoint?
+  threat_frameworks: [{framework: owasp_llm, ref: "LLM10:2025", version: "2025"}]
+  detect_keywords: [rate limit model, token budget, spend limit, quota]

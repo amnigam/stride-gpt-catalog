@@ -1,0 +1,5 @@
+pydantic>=2.5
+PyYAML>=6.0
+# optional:
+#   anthropic>=0.39     # for the LLM engine (pip install -e .[llm])
+#   streamlit>=1.30     # for the UI    (pip install -e .[app])

@@ -1,0 +1,17 @@
+# Generative layer — output/provenance risk (side-branch of the LLM tiers).
+- id: GEN-PROV-001
+  title: Content provenance / watermarking
+  intent: Generated content carries provenance signals (e.g. C2PA).
+  layers: [ai.generative]
+  stride: [Repudiation]
+  default_expectation: recommended
+  assessment_signal: Does generated content carry provenance/watermark signals (C2PA)?
+  detect_keywords: [c2pa, provenance, watermark, content credentials]
+
+- id: GEN-SAFE-001
+  title: Harmful-generation filtering
+  intent: Generation is filtered for harmful/unsafe content.
+  layers: [ai.generative]
+  stride: [Tampering]
+  assessment_signal: Is generated output filtered for harmful/unsafe content?
+  detect_keywords: [content safety filter, generation filtering, moderation]

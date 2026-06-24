@@ -1,0 +1,35 @@
+- id: CLD-SEG-001
+  title: Network segmentation / VPC boundaries
+  intent: Workloads are segmented so a compromise does not flatten the network.
+  layers: [platform.cloud]
+  stride: [ElevationOfPrivilege, InformationDisclosure]
+  assessment_signal: Are workloads segmented across VPC/subnet boundaries with controlled flows?
+  pci: [{requirement: "1.4.1"}]
+  detect_keywords: [vpc, segmentation, private subnet, network isolation]
+
+- id: CLD-KMS-001
+  title: Managed key management (KMS)
+  intent: Encryption keys are managed and rotated through a KMS.
+  layers: [platform.cloud]
+  stride: [InformationDisclosure]
+  assessment_signal: Are encryption keys managed/rotated via a KMS?
+  pci: [{requirement: "3.6.1"}]
+  detect_keywords: [kms, key management service, key rotation]
+
+- id: CLD-IAM-001
+  title: Cloud IAM roles (least privilege)
+  intent: Cloud compute uses scoped instance/service roles, not long-lived broad keys.
+  layers: [platform.cloud]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Do cloud workloads use scoped IAM roles rather than broad static credentials?
+  pci: [{requirement: "7.2.1"}]
+  detect_keywords: [iam role, instance role, service role, assume role]
+
+- id: CLD-SG-001
+  title: Restrictive security groups
+  intent: Inbound/outbound rules are least-exposure by default.
+  layers: [platform.cloud]
+  stride: [ElevationOfPrivilege]
+  assessment_signal: Are security-group/firewall rules restrictive (deny by default)?
+  pci: [{requirement: "1.3.1"}]
+  detect_keywords: [security group, ingress rules, nacl, firewall rules]
