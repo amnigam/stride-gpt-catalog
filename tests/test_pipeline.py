@@ -87,7 +87,7 @@ def test_dread_present_and_prioritized(declared_missing_ai):
 
 def test_resolved_count_matches_web_cloud_llm(declared_missing_ai):
     report = _run(declared_missing_ai)
-    assert report.resolved_control_count == 24  # pinned for these facets
+    assert report.resolved_control_count == 29  # pinned for these facets (web+cloud+llm)
 
 
 def test_pipeline_runs_with_no_evidence_at_all():

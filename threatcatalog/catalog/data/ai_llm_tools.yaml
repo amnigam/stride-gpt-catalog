@@ -2,27 +2,150 @@
 - id: AI-TOOL-001
   title: Tool invocation allow-list
   intent: The model may only call an explicit allow-list of tools/functions.
-  layers: [ai.llm_tools]
-  stride: [Tampering, ElevationOfPrivilege]
+  guidance: When the model can call tools/functions, restrict it to an explicit allow-list. An open-ended
+    ability to call anything is how a prompt-injection turns into a real-world action.
+  layers:
+  - ai.llm_tools
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
   assessment_signal: Is there an enforced allow-list of tools/functions the model may invoke?
   threat_frameworks:
-    - {framework: owasp_llm, ref: "LLM06:2025", version: "2025"}
-    - {framework: owasp_asi, ref: "ASI04:2026", version: "2026"}
-  detect_keywords: [tool allow-list, allowlist tools, function allowlist]
-
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  - framework: owasp_asi
+    ref: ASI04:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - tool allow-list
+  - allowlist tools
+  - function allowlist
 - id: AI-TOOL-002
   title: Tool output validation
   intent: Output returned from tools is treated as untrusted and validated.
-  layers: [ai.llm_tools]
-  stride: [Tampering]
+  guidance: Treat whatever a tool returns to the model as untrusted input and validate it — a compromised
+    or hostile tool result can carry an injection payload straight back into the model.
+  layers:
+  - ai.llm_tools
+  stride:
+  - Tampering
   assessment_signal: Is tool/function output validated and treated as untrusted input?
-  detect_keywords: [tool output validation, validate tool result]
-
+  detect_keywords:
+  - tool output validation
+  - validate tool result
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM05:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
 - id: AI-AGENCY-001
   title: Excessive-agency limits
   intent: Tools run with scoped permissions; high-impact actions are constrained.
-  layers: [ai.llm_tools]
-  stride: [ElevationOfPrivilege]
+  guidance: Tools should run with narrowly scoped permissions and high-impact actions should be constrained,
+    so the model's 'agency' can't exceed what you'd let a junior account do unsupervised.
+  layers:
+  - ai.llm_tools
+  stride:
+  - ElevationOfPrivilege
   assessment_signal: Do tools run with scoped permissions that limit excessive agency?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM06:2025", version: "2025"}]
-  detect_keywords: [scoped permissions, limited agency, constrained tools]
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - scoped permissions
+  - limited agency
+  - constrained tools
+- id: AI-SANDBOX-001
+  title: Tool execution sandboxing
+  intent: Tool/function calls execute in an isolated sandbox so a malicious call cannot reach the host
+    or other workloads.
+  guidance: When the model can trigger code or tool execution, run it in a constrained sandbox (container,
+    restricted runtime, no ambient network/credentials) — so a prompt-injected tool call is contained
+    rather than handed the keys to the host.
+  layers:
+  - ai.llm_tools
+  stride:
+  - ElevationOfPrivilege
+  assessment_signal: Do tool/function calls execute in an isolated sandbox with no ambient host access?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  - framework: owasp_asi
+    ref: ASI04:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+  detect_keywords:
+  - tool sandbox
+  - execution isolation
+  - sandboxed tools
+  - container isolation
+  - restricted runtime
+- id: AI-PARAM-001
+  title: Strict tool-parameter typing
+  intent: Tool/function arguments are constrained to a strict schema/type so injection can't ride in through
+    free-form parameters.
+  guidance: Define and enforce a strict schema for every tool's arguments (types, enums, ranges). Free-form
+    string parameters are where a prompt-injection smuggles a payload into a downstream system; typed,
+    validated parameters close that path.
+  layers:
+  - ai.llm_tools
+  stride:
+  - Tampering
+  assessment_signal: Are tool/function parameters constrained to a strict validated schema (types/enums),
+    not free-form?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - parameter typing
+  - schema validation
+  - function schema
+  - typed tool args
+  - json schema tool
+- id: AI-OBO-001
+  title: On-behalf-of token propagation
+  intent: When a tool acts for a user, a scoped, delegated (on-behalf-of) credential is used rather than
+    a broad service token.
+  guidance: If every tool call uses one powerful service account, the model effectively has god-mode.
+    Propagate the user's identity as a scoped, on-behalf-of token so a tool can only do what that user
+    could do — generalising the MCP 'no token passthrough' rule to all tool calls.
+  layers:
+  - ai.llm_tools
+  stride:
+  - ElevationOfPrivilege
+  assessment_signal: Do tools act with a scoped on-behalf-of credential for the user rather than a broad
+    shared service token?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  - framework: owasp_api
+    ref: API1:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  detect_keywords:
+  - on-behalf-of
+  - obo token
+  - delegated credential
+  - scoped token
+  - token exchange
+  - rfc 8693

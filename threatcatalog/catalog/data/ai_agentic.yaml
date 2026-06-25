@@ -2,35 +2,111 @@
 - id: ASI-MEM-001
   title: Agent memory isolation
   intent: Agent memory is isolated per tenant/session and resistant to poisoning.
-  layers: [ai.agentic]
-  stride: [Tampering]
+  guidance: An agent's memory must be isolated per tenant/session and protected from poisoning, so one
+    user (or a planted memory) can't influence another's agent or persist malicious state.
+  layers:
+  - ai.agentic
+  stride:
+  - Tampering
   assessment_signal: Is agent memory isolated per tenant/session and protected from poisoning?
-  threat_frameworks: [{framework: owasp_asi, ref: "ASI02:2026", version: "2026"}]
-  detect_keywords: [memory isolation, memory poisoning, per-tenant memory]
-
+  threat_frameworks:
+  - framework: owasp_asi
+    ref: ASI02:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - memory isolation
+  - memory poisoning
+  - per-tenant memory
 - id: ASI-HITL-001
   title: Human-in-the-loop on high-risk actions
   intent: High-impact actions require human approval.
-  layers: [ai.agentic]
-  stride: [ElevationOfPrivilege]
+  guidance: High-impact agent actions (payments, deletions, external sends) should pause for human approval.
+    A human checkpoint is the backstop when autonomy goes wrong.
+  layers:
+  - ai.agentic
+  stride:
+  - ElevationOfPrivilege
   assessment_signal: Do high-risk agent actions require human approval (HITL)?
-  threat_frameworks: [{framework: owasp_asi, ref: "ASI06:2026", version: "2026"}]
-  detect_keywords: [human in the loop, human approval, approval gate, hitl]
-
+  threat_frameworks:
+  - framework: owasp_asi
+    ref: ASI06:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - human in the loop
+  - human approval
+  - approval gate
+  - hitl
 - id: ASI-LOOP-001
   title: Goal/loop bounds
   intent: Agent loops are bounded to contain runaway behaviour and cost.
-  layers: [ai.agentic]
-  stride: [DenialOfService]
+  guidance: Bound an agent's loops and step counts so a goal it can't reach doesn't turn into runaway
+    behaviour and runaway cost.
+  layers:
+  - ai.agentic
+  stride:
+  - DenialOfService
   assessment_signal: Are agent iteration/goal loops bounded to contain runaway behaviour?
-  threat_frameworks: [{framework: owasp_asi, ref: "ASI08:2026", version: "2026"}]
-  detect_keywords: [loop bound, max iterations, runaway, step limit]
-
+  threat_frameworks:
+  - framework: owasp_asi
+    ref: ASI08:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - loop bound
+  - max iterations
+  - runaway
+  - step limit
 - id: ASI-MULTI-001
   title: Multi-agent compromise containment
   intent: One compromised agent cannot cascade across the system.
-  layers: [ai.agentic]
-  stride: [ElevationOfPrivilege]
+  guidance: In multi-agent systems, contain a compromised agent so it can't cascade across the others
+    — isolate identities, channels, and authority between agents.
+  layers:
+  - ai.agentic
+  stride:
+  - ElevationOfPrivilege
   assessment_signal: Is a compromised agent contained from cascading across other agents?
-  threat_frameworks: [{framework: owasp_asi, ref: "ASI09:2026", version: "2026"}]
-  detect_keywords: [agent isolation, multi-agent containment, blast radius]
+  threat_frameworks:
+  - framework: owasp_asi
+    ref: ASI09:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  detect_keywords:
+  - agent isolation
+  - multi-agent containment
+  - blast radius
+- id: ASI-AUTH-001
+  title: Inter-agent mutual authentication
+  intent: Agents authenticate one another before acting on inter-agent messages, so a spoofed agent can't
+    issue trusted instructions.
+  guidance: In multi-agent systems, a message that claims to be 'from the planner agent' shouldn't be
+    trusted on its word. Give agents verifiable identities and require mutual authentication so a rogue
+    or impersonated agent can't inject commands into the workflow.
+  layers:
+  - ai.agentic
+  stride:
+  - Spoofing
+  assessment_signal: Do agents mutually authenticate before trusting inter-agent messages/instructions?
+  threat_frameworks:
+  - framework: owasp_asi
+    ref: ASI09:2026
+    version: '2026'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  detect_keywords:
+  - inter-agent authentication
+  - agent identity
+  - mutual auth
+  - agent trust
+  - signed agent message

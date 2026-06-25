@@ -1,0 +1,35 @@
+BankLedgerPro is a fictional financial application deployed entirely on‑premises within a regional bank’s data center. It is designed to handle sensitive financial ledgers, transaction reconciliation, and reporting. The architecture is divided into clear zones to reflect traditional enterprise segmentation, but deliberately leaves several gaps to highlight potential risks for threat modeling.
+
+🔒 Perimeter Zone
+Firewall / IDS: Provides basic packet filtering and intrusion detection. However, rules are outdated and lack modern anomaly detection.
+VPN Gateway (Unpatched): Remote employees connect through a VPN appliance that has known vulnerabilities. This is a deliberate weak point to model external compromise.
+Partner VPN: Third‑party vendors connect via a separate tunnel, but without strong isolation from internal systems.
+
+🌐 DMZ Zone
+Web Server (HTTP/HTTPS): Hosts customer‑facing portals. TLS is terminated here, but patching cadence is irregular.
+FTP Server (Legacy): Still used for batch file transfers with partner banks. Credentials are transmitted in cleartext, leaving a major attack vector.
+Email Server (SMTP): Handles external communications, but lacks modern spam and phishing filters.
+Reverse Proxy (Public APIs): Provides access to APIs for partners, but without rate limiting or strong authentication.
+
+🏢 Internal Network
+Application Tier:
+BankLedgerPro App Servers: Java/Spring applications running core business logic.
+Internal API Gateway: Routes traffic internally, but lacks granular access control.
+Cache Server: In‑memory cache for performance, but no encryption in transit.
+
+Data Tier:
+SQL Financial Database: Central repository for ledgers and transactions. Encryption at rest is missing.
+Reporting Database: Used for analytics and compliance reporting.
+Backup Appliance: Nightly backups are taken, but tapes are stored unencrypted.
+
+Admin Zone:
+Admin Workstations: Privileged consoles with weak authentication (no MFA).
+Jump Host: Provides SSH access, but resides on the same flat network as app servers.
+
+📂 Shared Services
+File Server (NFS/SMB): Shared drives for employees, containing sensitive documents without DLP controls.
+CI/CD Build Servers: Developer network has direct access to internal systems, creating a supply chain risk.
+SIEM & Logging: Basic log collection with manual review; alerts are often delayed or missed.
+
+🗄️ Offline Storage
+Tape Vault (Offsite Backups): Physical tapes stored offsite, but unencrypted. Represents a risk of data theft if tapes are lost or stolen.

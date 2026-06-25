@@ -20,7 +20,7 @@ isn't part of the project — delete it.
 | `models.py` | All Pydantic models + enums — the single typed source of truth. |
 | `catalog/loader.py` | Loads + validates the YAML catalog (the gate; fails loud on bad data). |
 | `catalog/resolver.py` | Facets → expected control set, with AI-tier inheritance. |
-| `catalog/data/*.yaml` | **The catalog itself** — 10 layered files, 41 controls. This is what you grow over time. |
+| `catalog/data/*.yaml` | **The catalog itself** — 12 layered files, 61 controls (incl. `platform_saas.yaml`, `platform_api.yaml`). Each control carries verbose `guidance`. This is what you grow over time. |
 | `intake.py` | Declaration template, conservative text detector, ledger merge. |
 | `gap.py` | The deterministic gap engine (expected vs implemented). |
 | `pci.py` | PCI DSS v4.0.1 compliance view (second read off the same gap). |

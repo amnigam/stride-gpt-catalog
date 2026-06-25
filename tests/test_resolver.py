@@ -66,3 +66,31 @@ def test_multi_platform_unions_layers(catalog):
     p = _profile([PlatformFacet.WEB, PlatformFacet.MOBILE], [AICapability.NONE])
     ids = {c.id for c in resolve(p, catalog.controls)}
     assert "WEB-WAF-001" in ids and "MOB-PIN-001" in ids
+
+
+def test_multitenant_facet_activates_saas_layer():
+    layers = active_layers(_profile([PlatformFacet.WEB, PlatformFacet.MULTITENANT], [AICapability.NONE]))
+    assert Layer.PLATFORM_SAAS in layers
+
+
+def test_api_facet_activates_api_layer():
+    layers = active_layers(_profile([PlatformFacet.API], [AICapability.NONE]))
+    assert Layer.PLATFORM_API in layers
+
+
+def test_saas_differentiated_from_plain_web_cloud(catalog):
+    # the SaaS differentiation we promised: multitenant adds tenant-isolation controls
+    web_cloud = {c.id for c in resolve(
+        _profile([PlatformFacet.WEB, PlatformFacet.CLOUD], [AICapability.NONE]), catalog.controls)}
+    saas = {c.id for c in resolve(
+        _profile([PlatformFacet.WEB, PlatformFacet.CLOUD, PlatformFacet.MULTITENANT],
+                 [AICapability.NONE]), catalog.controls)}
+    assert web_cloud < saas                      # strict superset
+    assert "SAAS-ISO-001" in (saas - web_cloud)
+
+
+def test_cloud_workload_excludes_web_and_saas(catalog):
+    ids = {c.id for c in resolve(
+        _profile([PlatformFacet.CLOUD], [AICapability.NONE]), catalog.controls)}
+    assert "WEB-WAF-001" not in ids and "SAAS-ISO-001" not in ids
+    assert "CLD-SEG-001" in ids

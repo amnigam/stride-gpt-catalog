@@ -1,0 +1,120 @@
+# SaaS / multi-tenant layer — activated by the 'multitenant' facet.
+# These controls are what separate a true SaaS product from a single-tenant web app.
+- id: SAAS-ISO-001
+  title: Tenant data isolation
+  intent: Every data access is scoped to the caller's tenant; no query or object identifier can cross
+    tenant boundaries.
+  guidance: 'This is the control that makes a SaaS product safe: one customer must never see another''s
+    data. Enforce a tenant scope on every query (e.g. row-level security or a mandatory tenant filter)
+    rather than trusting application code to remember it each time.'
+  layers:
+  - platform.saas
+  stride:
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Is every data access scoped to the caller's tenant so cross-tenant access is impossible
+    by construction?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: owasp_api
+    ref: API1:2023
+    version: '2023'
+  pci:
+  - requirement: 7.2.1
+  detect_keywords:
+  - tenant isolation
+  - row level security
+  - tenant id
+  - multi-tenant
+  - data segregation
+- id: SAAS-AUTHZ-001
+  title: Per-tenant authorization context
+  intent: The tenant a request belongs to is derived server-side from the authenticated session, never
+    taken from client-supplied input.
+  guidance: If the tenant id comes from a header, parameter, or token claim the client can change, a user
+    can switch tenants. Bind tenant context to the verified session on the server and check it on every
+    request.
+  layers:
+  - platform.saas
+  stride:
+  - ElevationOfPrivilege
+  assessment_signal: Is tenant context established server-side from the session rather than trusted from
+    client input?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  - framework: owasp_api
+    ref: API1:2023
+    version: '2023'
+  detect_keywords:
+  - tenant context
+  - per-tenant authorization
+  - tenant scoping
+  - tenant claim
+- id: SAAS-LOG-001
+  title: Tenant-scoped audit logging
+  intent: Audit logs carry tenant identity so activity can be attributed to, and segregated by, customer.
+  guidance: When something goes wrong you need to answer 'which tenant, doing what?'. Stamp tenant identity
+    on security-relevant log events, and make sure one customer's logs can't be read by another.
+  layers:
+  - platform.saas
+  stride:
+  - Repudiation
+  assessment_signal: Do audit logs record tenant identity and keep per-tenant activity attributable/segregated?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  detect_keywords:
+  - tenant logging
+  - per-tenant audit
+  - tenant attribution
+- id: SAAS-QUOTA-001
+  title: Per-tenant resource quotas (noisy-neighbour)
+  intent: Per-tenant limits stop one customer exhausting shared capacity and degrading others.
+  guidance: On shared infrastructure, one tenant's spike — a huge import, a runaway job — shouldn't take
+    the service down for everyone. Apply per-tenant rate and resource quotas so load is fairly bounded.
+  layers:
+  - platform.saas
+  stride:
+  - DenialOfService
+  default_expectation: recommended
+  assessment_signal: Are per-tenant resource/rate quotas enforced to prevent noisy-neighbour exhaustion?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  - framework: owasp_api
+    ref: API4:2023
+    version: '2023'
+  detect_keywords:
+  - tenant quota
+  - noisy neighbor
+  - resource quota
+  - fair use
+  - per-tenant limit
+- id: SAAS-LEAK-001
+  title: Cross-tenant leakage testing
+  intent: Testing actively attempts to reach another tenant's data and confirms isolation holds.
+  guidance: Isolation that's never tested tends to quietly break during refactors. Include cross-tenant
+    access attempts in your test/pen-test plan — create two tenants and prove one cannot reach the other's
+    data, IDs, files, or cache.
+  layers:
+  - platform.saas
+  stride:
+  - InformationDisclosure
+  default_expectation: recommended
+  assessment_signal: Is cross-tenant isolation explicitly tested (attempts to reach another tenant's data
+    fail)?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 18
+    version: '8.1'
+  detect_keywords:
+  - cross-tenant test
+  - isolation testing
+  - tenant leakage
+  - multi-tenant pentest

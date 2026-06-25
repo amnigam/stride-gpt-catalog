@@ -22,6 +22,8 @@ PLATFORM_LAYER: dict[PlatformFacet, Layer] = {
     PlatformFacet.CLOUD: Layer.PLATFORM_CLOUD,
     PlatformFacet.ONPREM: Layer.PLATFORM_ONPREM,
     PlatformFacet.MOBILE: Layer.PLATFORM_MOBILE,
+    PlatformFacet.MULTITENANT: Layer.PLATFORM_SAAS,
+    PlatformFacet.API: Layer.PLATFORM_API,
 }
 
 # Each AI tier expands to the layers it inherits. MCP and agentic both build on

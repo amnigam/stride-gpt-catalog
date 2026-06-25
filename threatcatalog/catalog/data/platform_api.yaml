@@ -1,0 +1,131 @@
+# API layer — API as a first-class attack surface (OWASP API Security Top 10 2023).
+# Activated by the 'api' facet; compose with web/cloud as needed.
+- id: API-BOLA-001
+  title: Object-level authorization (BOLA)
+  intent: Every API object access verifies the caller owns/may access that specific object, server-side.
+  guidance: 'The most common and damaging API flaw: an endpoint takes an object id (e.g. /orders/48291)
+    and returns it after checking the caller is logged in, but not that the object belongs to them. Test
+    every data endpoint with two accounts and confirm account B cannot read account A''s records.'
+  layers:
+  - platform.api
+  stride:
+  - ElevationOfPrivilege
+  - InformationDisclosure
+  assessment_signal: Does each object-level API access check ownership/authorization server-side (not
+    just authentication)?
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API1:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  pci:
+  - requirement: 7.2.1
+  detect_keywords:
+  - bola
+  - idor
+  - object level authorization
+  - ownership check
+  - access control
+- id: API-AUTHN-001
+  title: API authentication & token validation
+  intent: API requests are authenticated and tokens are fully validated (signature, algorithm, expiry).
+  guidance: Verify JWTs properly — reject 'alg:none', check signature and issuer, keep token lifetimes
+    short — and rate-limit auth endpoints. Broken API authentication is the entry point for account takeover.
+  layers:
+  - platform.api
+  stride:
+  - Spoofing
+  assessment_signal: Are API tokens validated (signature/alg/expiry) and sensitive endpoints never anonymous?
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API2:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  detect_keywords:
+  - jwt validation
+  - api authentication
+  - token validation
+  - oauth
+  - alg none
+- id: API-RES-001
+  title: API resource-consumption limits
+  intent: 'APIs cap resource use: pagination limits, payload-size caps, and per-client rate limits.'
+  guidance: Without limits, a single client can exhaust the API with huge pages, oversized payloads, or
+    floods — both a denial-of-service and a cost problem. Enforce a maximum page size, request size, and
+    per-account/per-IP rate.
+  layers:
+  - platform.api
+  stride:
+  - DenialOfService
+  assessment_signal: Are pagination caps, payload-size limits, and per-client rate limits enforced on
+    the API?
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API4:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  detect_keywords:
+  - pagination limit
+  - payload size
+  - api rate limit
+  - resource consumption
+  - throttling
+- id: API-INV-001
+  title: API inventory & version governance
+  intent: All API endpoints are inventoried and old/undocumented versions are retired.
+  guidance: Shadow and zombie APIs — forgotten staging endpoints, deprecated versions still live — are
+    breached precisely because nobody is watching them. Keep a current inventory and decommission what
+    you no longer support.
+  layers:
+  - platform.api
+  stride:
+  - InformationDisclosure
+  - Tampering
+  default_expectation: recommended
+  assessment_signal: Is there a maintained inventory of API endpoints/versions with deprecated ones retired?
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API9:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 2
+    version: '8.1'
+  detect_keywords:
+  - api inventory
+  - shadow api
+  - deprecated endpoint
+  - api versioning
+  - zombie api
+- id: API-SSRF-001
+  title: SSRF protection on server-side fetches
+  intent: Where the API fetches a user-supplied URL, destinations are validated/allow-listed and internal
+    ranges blocked.
+  guidance: If your API will fetch a URL a user provides (webhooks, link previews, imports), an attacker
+    can point it at internal services or the cloud metadata endpoint. Allow-list destinations and block
+    link-local/internal IP ranges.
+  layers:
+  - platform.api
+  stride:
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Are server-side fetches of user-supplied URLs validated/allow-listed with internal
+    ranges blocked?
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API7:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - ssrf
+  - server side request forgery
+  - metadata endpoint
+  - url allowlist
+  - outbound fetch

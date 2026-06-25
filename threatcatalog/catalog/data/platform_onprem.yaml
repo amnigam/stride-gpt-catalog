@@ -1,17 +1,67 @@
+# On-prem layer — self-hosted / data-centre deployments and the hosts that run them.
 - id: ONP-FW-001
   title: Network firewall
   intent: A perimeter/internal firewall controls traffic between zones.
-  layers: [platform.onprem]
-  stride: [ElevationOfPrivilege]
+  guidance: A firewall should control and inspect traffic between network zones (e.g. DMZ vs internal),
+    not just at the perimeter. East-west movement is how attackers spread once inside.
+  layers:
+  - platform.onprem
+  stride:
+  - ElevationOfPrivilege
   assessment_signal: Is a firewall enforcing controlled traffic between network zones?
-  pci: [{requirement: "1.4.1"}]
-  detect_keywords: [firewall, perimeter firewall, network zones]
-
+  pci:
+  - requirement: 1.4.1
+  detect_keywords:
+  - firewall
+  - perimeter firewall
+  - network zones
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 12
+    version: '8.1'
 - id: ONP-HARD-001
   title: Host hardening (CIS benchmark)
   intent: Servers are hardened to a recognized benchmark.
-  layers: [platform.onprem]
-  stride: [ElevationOfPrivilege]
+  guidance: Servers should be built from a hardened baseline (CIS Benchmark, STIG, or golden image) rather
+    than default installs, which ship with unnecessary services and weak settings.
+  layers:
+  - platform.onprem
+  stride:
+  - ElevationOfPrivilege
   default_expectation: recommended
   assessment_signal: Are hosts hardened to a CIS (or equivalent) benchmark?
-  detect_keywords: [hardening, cis benchmark, stig, baseline image]
+  detect_keywords:
+  - hardening
+  - cis benchmark
+  - stig
+  - baseline image
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+- id: EDR-001
+  title: Endpoint detection & response (EDR) telemetry
+  intent: Servers and endpoints run an EDR agent that feeds telemetry to detect and respond to host compromise.
+  guidance: Audit logs tell you what the app did; EDR tells you what the host did — process spawns, persistence,
+    lateral movement. On any managed host (on-prem or cloud VM) an EDR agent shipping telemetry to a monitored
+    pipeline is the difference between detecting a breach and missing it.
+  layers:
+  - platform.onprem
+  - platform.cloud
+  stride:
+  - Repudiation
+  - Tampering
+  assessment_signal: Do managed hosts run an EDR/XDR agent feeding telemetry to a monitored detection
+    pipeline?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  detect_keywords:
+  - edr
+  - endpoint detection
+  - xdr
+  - host telemetry
+  - threat detection
+  - crowdstrike
+  - defender

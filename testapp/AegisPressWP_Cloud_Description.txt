@@ -1,0 +1,27 @@
+High-level overview
+AegisPress is a secure WordPress customer portal hosted in AWS where WordPress runs on hardened EC2 instances instead of a platform service. Sensitive customer details are never persisted in the WordPress database; instead the site uses a tokenization pattern with an external SecureVault API for PII storage and retrieval. The design enforces defense‑in‑depth, least privilege, and ephemeral access to sensitive data.
+
+Core components and placement
+Edge and DNS  
+Route 53 for DNS and health checks; CloudFront as CDN and TLS termination with an edge WAF for OWASP rules and rate limiting.
+
+Ingress and load balancing  
+Application Load Balancer with HTTPS listeners and host/path routing; ALB sits in public subnets and forwards to EC2 instances in private subnets.
+
+Compute  
+EC2 Auto Scaling Group running WordPress stack (Nginx, PHP‑FPM, WP) on hardened AMIs; instances boot with instance profile roles and use user data for configuration. Admin access is via a bastion or SSM Session Manager; SSH is disabled for general use.
+
+Storage and persistence  
+Amazon Aurora (MySQL) for WordPress metadata only; EBS volumes for EC2 (encrypted); S3 for media assets with server‑side encryption and origin access restricted to CloudFront.
+
+Caching and sessions  
+ElastiCache (Redis) for session storage and transient caches; encrypted in transit and at rest.
+
+Secrets and keys  
+Secrets Manager for DB and API credentials with automatic rotation; KMS for envelope encryption of tokens and keys for storage services.
+
+SecureVault API  
+External secure PII store accessed over mutual TLS using short‑lived credentials; returns tokenized references and ephemeral plaintext only when authorized.
+
+Observability and detection  
+Centralized logging and monitoring with CloudTrail, GuardDuty, Macie, CloudWatch, and VPC Flow Logs; logs retained in an immutable store in a separate account.

@@ -31,7 +31,9 @@ LAYER_BLURB = {
     Layer.PLATFORM_WEB: "Browser-facing web / SaaS applications.",
     Layer.PLATFORM_CLOUD: "Cloud-hosted workloads (VPC, IAM, KMS…).",
     Layer.PLATFORM_ONPREM: "On-premises deployments.",
-    Layer.PLATFORM_MOBILE: "Mobile clients (OWASP MASVS).",
+    Layer.PLATFORM_MOBILE: "Mobile clients (OWASP MASVS + Mobile Top 10 2024).",
+    Layer.PLATFORM_SAAS: "Multi-tenant SaaS concerns — activated by the 'multitenant' facet.",
+    Layer.PLATFORM_API: "API as a first-class attack surface (OWASP API Top 10 2023).",
     Layer.AI_LLM: "LLM-integrated apps (OWASP LLM Top 10 2025).",
     Layer.AI_LLM_TOOLS: "LLMs that call tools / functions.",
     Layer.AI_MCP: "Apps using Model Context Protocol servers (OWASP MCP Top 10, beta).",
@@ -83,6 +85,9 @@ filtered = [c for c in controls if matches(c)]
 
 def control_to_markdown(c) -> str:
     out = [f"### {c.id} — {c.title}", "", f"_{c.intent}_", ""]
+    if c.guidance:
+        out.append(c.guidance)
+        out.append("")
     out.append(f"- **Layers:** {', '.join(l.value for l in c.layers)}")
     out.append(f"- **STRIDE:** {', '.join(s.value for s in c.stride)}")
     out.append(f"- **Expectation:** {c.default_expectation.value}")

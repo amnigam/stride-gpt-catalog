@@ -2,60 +2,206 @@
 - id: AI-PI-001
   title: Prompt-injection defense
   intent: Untrusted text (user fields, retrieved records, tool output) is treated as data, not instructions.
-  layers: [ai.llm]
-  stride: [Tampering]
-  assessment_signal: Is untrusted text delimited/labelled as data-not-instructions before reaching the model?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM01:2025", version: "2025"}]
-  detect_keywords: [prompt injection, input labeling, delimiter, instruction defense]
-
+  guidance: 'Anything the model reads that didn''t come from you — user input, retrieved documents, tool
+    results — must be treated as data, not as instructions to obey. Without this, a poisoned document
+    or crafted prompt can hijack the model''s behaviour (the #1 LLM risk).'
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  assessment_signal: Is untrusted text delimited/labelled as data-not-instructions before reaching the
+    model?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM01:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - prompt injection
+  - input labeling
+  - delimiter
+  - instruction defense
 - id: AI-DM-001
   title: Data minimization before model call
   intent: Only the fields needed for the task leave the trust boundary to the model.
-  layers: [ai.llm]
-  stride: [InformationDisclosure]
+  guidance: Send the model only the fields it actually needs for the task. The less sensitive data that
+    crosses the boundary to the model/provider, the less there is to leak or retain.
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
   assessment_signal: Is the payload minimized so only necessary fields are sent to the model?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM02:2025", version: "2025"}]
-  detect_keywords: [data minimization, field filtering, redaction before, minimize payload]
-
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM02:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - data minimization
+  - field filtering
+  - redaction before
+  - minimize payload
 - id: AI-ENDP-001
   title: No-retention / enterprise model endpoint
   intent: The model endpoint does not retain prompts; provider due diligence is done.
-  layers: [ai.llm]
-  stride: [InformationDisclosure]
+  guidance: Calls should go to an enterprise/no-retention model endpoint, with due diligence done on what
+    the provider stores and trains on. A consumer endpoint that retains prompts is a data-leakage path.
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
   assessment_signal: Does the model call go to a no-retention/enterprise endpoint with provider due diligence?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM03:2025", version: "2025"}]
-  detect_keywords: [no retention, zero data retention, enterprise endpoint, private endpoint, dedicated capacity]
-
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM03:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 15
+    version: '8.1'
+  detect_keywords:
+  - no retention
+  - zero data retention
+  - enterprise endpoint
+  - private endpoint
+  - dedicated capacity
 - id: AI-OUT-001
   title: Output filtering for sensitive disclosure
   intent: Model output is filtered against the viewer's clearance before being returned.
-  layers: [ai.llm]
-  stride: [InformationDisclosure]
+  guidance: Filter what the model returns against the requesting user's permissions before showing it,
+    so the model can't become a way to read data the user isn't allowed to see.
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
   assessment_signal: Is model output filtered for sensitive data against the requesting user's clearance?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM02:2025", version: "2025"}]
-  detect_keywords: [output filtering, response filtering, disclosure filter]
-
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM02:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - output filtering
+  - response filtering
+  - disclosure filter
 - id: AI-AUTHZ-001
   title: Authorization scoping on AI features
   intent: AI features enforce the same per-record authorization as the rest of the app.
-  layers: [ai.llm]
-  stride: [ElevationOfPrivilege]
+  guidance: An AI feature must enforce the same per-record, per-tenant authorization as the rest of the
+    app — checked server-side. 'The model decided' is not an access-control decision.
+  layers:
+  - ai.llm
+  stride:
+  - ElevationOfPrivilege
   assessment_signal: Is invocation of the AI feature authorized per-record/per-tenant server-side?
-  detect_keywords: [authorization scoping, per-record authorization, server-side authz]
-
+  detect_keywords:
+  - authorization scoping
+  - per-record authorization
+  - server-side authz
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
 - id: AI-LOG-001
   title: LLM prompt/response logging
   intent: Prompts and responses are logged for audit and incident reconstruction.
-  layers: [ai.llm]
-  stride: [Repudiation]
+  guidance: Log prompts and responses (with appropriate redaction) so AI-driven actions can be audited
+    and incidents reconstructed. Treat this like any other security-relevant event stream.
+  layers:
+  - ai.llm
+  stride:
+  - Repudiation
   assessment_signal: Are model prompts and responses logged to the audit pipeline?
-  detect_keywords: [llm logging, prompt logging, model audit log]
-
+  detect_keywords:
+  - llm logging
+  - prompt logging
+  - model audit log
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
 - id: AI-RATE-001
   title: Rate / spend limits on model endpoint
   intent: Per-user and global limits cap model cost and abuse.
-  layers: [ai.llm]
-  stride: [DenialOfService]
+  guidance: Cap per-user and global model usage with rate and token/spend limits. Without them, abuse
+    or a runaway loop becomes both a denial-of-service and a surprise bill.
+  layers:
+  - ai.llm
+  stride:
+  - DenialOfService
   assessment_signal: Are rate and token/spend limits enforced on the model endpoint?
-  threat_frameworks: [{framework: owasp_llm, ref: "LLM10:2025", version: "2025"}]
-  detect_keywords: [rate limit model, token budget, spend limit, quota]
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM10:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  detect_keywords:
+  - rate limit model
+  - token budget
+  - spend limit
+  - quota
+- id: AI-VEC-001
+  title: Vector store / RAG document-level access control
+  intent: Retrieval respects per-document, per-user permissions so RAG can't surface documents the caller
+    may not see.
+  guidance: RAG is an access-control problem wearing a search-feature costume. If the vector store returns
+    any matching chunk regardless of who's asking, a low-privileged user can pull restricted documents
+    through the assistant. Enforce the same ACLs on retrieval that you enforce on the source system.
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Does vector/RAG retrieval enforce per-document/per-user access control (not just
+    relevance)?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM08:2025
+    version: '2025'
+  - framework: owasp_llm
+    ref: LLM02:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - vector db
+  - rag
+  - document acl
+  - retrieval authorization
+  - embedding access
+  - per-document permission
+- id: AI-MODEL-PROV-001
+  title: Model provenance & integrity
+  intent: Models, weights and adapters come from a verified source with integrity verification (signing/hashing).
+  guidance: A tampered or impostor model is a supply-chain compromise at the core of your app. Pull models
+    from trusted registries, verify signatures/hashes, and pin versions — especially for any self-hosted
+    or fine-tuned weights.
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  - Spoofing
+  assessment_signal: Is the model/weights supply chain verified (trusted source + signing/hash/version
+    pin)?
+  threat_frameworks:
+  - framework: owasp_llm
+    ref: LLM03:2025
+    version: '2025'
+  - framework: cis_v8
+    ref: Control 2
+    version: '8.1'
+  detect_keywords:
+  - model provenance
+  - model integrity
+  - model signing
+  - weights verification
+  - model supply chain
+  - pinned model

@@ -41,6 +41,8 @@ class Layer(str, Enum):
     PLATFORM_CLOUD = "platform.cloud"
     PLATFORM_ONPREM = "platform.onprem"
     PLATFORM_MOBILE = "platform.mobile"
+    PLATFORM_SAAS = "platform.saas"        # multi-tenant SaaS concerns
+    PLATFORM_API = "platform.api"          # API as a first-class attack surface
     AI_LLM = "ai.llm"
     AI_LLM_TOOLS = "ai.llm_tools"
     AI_MCP = "ai.mcp"
@@ -53,6 +55,8 @@ class PlatformFacet(str, Enum):
     CLOUD = "cloud"
     ONPREM = "onprem"
     MOBILE = "mobile"
+    MULTITENANT = "multitenant"            # SaaS / multi-tenant deployment
+    API = "api"                            # exposes an API surface
 
 
 class AICapability(str, Enum):
@@ -160,6 +164,7 @@ class Control(BaseModel):
     id: str
     title: str
     intent: str
+    guidance: Optional[str] = None        # plain-language detail for app teams / PMs
     layers: list[Layer] = Field(min_length=1)
     stride: list[Stride] = Field(min_length=1)
     assessment_signal: str                       # the question used to judge presence

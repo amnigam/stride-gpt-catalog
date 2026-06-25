@@ -1,42 +1,107 @@
+# Web layer — browser-facing web applications.
 - id: WEB-WAF-001
   title: Web application firewall
   intent: A WAF fronts the application to filter common web attacks.
-  layers: [platform.web]
-  stride: [Tampering, DenialOfService]
+  guidance: A Web Application Firewall sits in front of the app and filters common web attacks before
+    they reach your code. To count, it should be in blocking mode, not just logging — PCI DSS 4.0.1 makes
+    this mandatory for public-facing apps.
+  layers:
+  - platform.web
+  stride:
+  - Tampering
+  - DenialOfService
   assessment_signal: Is a WAF deployed in front of the application (in blocking mode)?
-  pci: [{requirement: "6.4.2"}]
-  detect_keywords: [waf, web application firewall, aws waf, cloudflare waf]
-
+  pci:
+  - requirement: 6.4.2
+  detect_keywords:
+  - waf
+  - web application firewall
+  - aws waf
+  - cloudflare waf
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
 - id: WEB-CSRF-001
   title: CSRF protection
   intent: State-changing requests are protected against cross-site request forgery.
-  layers: [platform.web]
-  stride: [Tampering, Spoofing]
+  guidance: State-changing requests (transfers, profile edits, deletes) should carry an anti-forgery token
+    or rely on SameSite cookies so another site can't trick a logged-in user's browser into making them.
+  layers:
+  - platform.web
+  stride:
+  - Tampering
+  - Spoofing
   assessment_signal: Are state-changing requests protected with anti-CSRF tokens?
-  detect_keywords: [csrf, anti-forgery, samesite]
-
+  detect_keywords:
+  - csrf
+  - anti-forgery
+  - samesite
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
 - id: WEB-SESS-001
   title: Secure session management
   intent: Sessions use secure, HttpOnly, SameSite cookies with sane lifetimes.
-  layers: [platform.web]
-  stride: [Spoofing]
+  guidance: Session cookies should be Secure, HttpOnly and SameSite, with sensible timeouts and rotation
+    on login. This stops session theft and fixation. PCI expects re-authentication after 15 minutes idle.
+  layers:
+  - platform.web
+  stride:
+  - Spoofing
   assessment_signal: Are sessions managed securely (HttpOnly/Secure/SameSite, rotation, timeout)?
-  pci: [{requirement: "8.2.8"}]
-  detect_keywords: [secure session, httponly, session timeout, session rotation]
-
+  pci:
+  - requirement: 8.2.8
+  detect_keywords:
+  - secure session
+  - httponly
+  - session timeout
+  - session rotation
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
 - id: WEB-HDR-001
   title: Security response headers
   intent: CSP, HSTS and related headers harden the browser surface.
-  layers: [platform.web]
-  stride: [Tampering]
+  guidance: Response headers like Content-Security-Policy, HSTS and X-Content-Type-Options harden the
+    browser against XSS, protocol downgrade, and MIME-sniffing. They are cheap to add and catch whole
+    classes of attack.
+  layers:
+  - platform.web
+  stride:
+  - Tampering
   default_expectation: recommended
   assessment_signal: Are security headers (CSP, HSTS, X-Content-Type-Options) set?
-  detect_keywords: [security headers, content security policy, csp, hsts]
-
+  detect_keywords:
+  - security headers
+  - content security policy
+  - csp
+  - hsts
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
 - id: WEB-RATE-001
   title: Request rate limiting
   intent: Abusive request volumes are throttled at the edge.
-  layers: [platform.web]
-  stride: [DenialOfService]
+  guidance: Throttle abusive request volumes at the edge or gateway so a single client can't overwhelm
+    the app or brute-force endpoints. This is the resource-consumption side of API abuse, not just classic
+    DDoS.
+  layers:
+  - platform.web
+  stride:
+  - DenialOfService
   assessment_signal: Is request rate limiting enforced at the edge/app?
-  detect_keywords: [rate limit, throttling, rate-limit]
+  detect_keywords:
+  - rate limit
+  - throttling
+  - rate-limit
+  threat_frameworks:
+  - framework: owasp_api
+    ref: API4:2023
+    version: '2023'
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
