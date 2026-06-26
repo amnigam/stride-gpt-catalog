@@ -20,9 +20,45 @@ _STATUS_LABEL = {
 }
 
 
+
+# --------------------------------------------------------------------------- #
+# Plain-language helpers — make the summary readable for a non-specialist
+# (e.g. a project manager reading only this report).
+# --------------------------------------------------------------------------- #
+_FACET_LABEL = {
+    "web": "web", "cloud": "cloud", "onprem": "on-premises", "mobile": "mobile",
+    "multitenant": "multi-tenant SaaS", "api": "API",
+}
+_AI_LABEL = {
+    "llm": "an LLM integration", "llm_tools": "an LLM with tool access",
+    "mcp": "an MCP tool integration", "agentic": "agentic AI",
+    "generative": "generative AI",
+}
+
+
+def _join_natural(items: list[str]) -> str:
+    items = [i for i in items if i]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+def _humanize_profile(p) -> str:
+    plats = _join_natural([_FACET_LABEL.get(f.value, f.value) for f in p.platforms])
+    ai = [_AI_LABEL[a.value] for a in p.ai_capabilities if a.value in _AI_LABEL]
+    ai_phrase = f" with {_join_natural(ai)}" if ai else ""
+    return (f"{p.name} \u2014 a {plats} application{ai_phrase}, "
+            f"handling data classified as {p.data_classification.value}")
+
+
 def summary_facts(r: ThreatModelReport) -> dict:
     """Compute the executive-summary facts once, so the Markdown and PDF renderers
-    share identical numbers. Pure data — no formatting."""
+    share identical numbers and wording. Pure data + plain-language prose — no
+    model calls, so the summary stays deterministic and auditable."""
     gi = r.gap_items
     not_present = [g for g in gi if g.status == ControlStatus.NOT_PRESENT]
     partial = [g for g in gi if g.status == ControlStatus.PARTIAL]
@@ -38,20 +74,21 @@ def summary_facts(r: ThreatModelReport) -> dict:
         return dread_by_threat[t.id].average if (t and t.id in dread_by_threat) else 0.0
 
     p = r.profile
-    if r.pci_view.in_scope:
-        pci_text = (f"in scope — {len(r.pci_view.exposed)} requirement-mapped control(s) "
-                    f"exposed, {len(r.pci_view.indeterminate)} to verify")
-    else:
-        pci_text = "out of scope"
 
-    posture = (
-        f"{p.name} ({', '.join(f.value for f in p.platforms)} · "
-        f"{', '.join(a.value for a in p.ai_capabilities)} · {p.data_classification.value} "
-        f"data) was assessed against {r.resolved_control_count} expected controls. The review "
-        f"identified {len(not_present) + len(partial)} gap(s) ({len(not_present)} not in place, "
-        f"{len(partial)} partial), {len(implemented)} confirmed in place, and {n_unknown} that "
-        f"could not be confirmed. PCI DSS v4.0.1 is {pci_text}.")
+    counts = {
+        "expected": r.resolved_control_count,
+        "implemented": len(implemented),
+        "not_present": len(not_present),
+        "partial": len(partial),
+        "gaps": len(not_present) + len(partial),
+        "unknown": n_unknown,
+        "in_scope": r.pci_view.in_scope,
+        "pci_exposed": len(r.pci_view.exposed),
+        "pci_indeterminate": len(r.pci_view.indeterminate),
+        "pci_covered": r.pci_view.covered_count,
+    }
 
+    # ---- the headline picks (named, so the summary reads completely on its own) ----
     top_threats = []
     for d in sorted(r.dread, key=lambda d: d.average, reverse=True)[:4]:
         t = threats_by_id.get(d.threat_id)
@@ -67,23 +104,71 @@ def summary_facts(r: ThreatModelReport) -> dict:
     strengths = [(g.control.id, g.control.title) for g in sorted(
         implemented, key=lambda g: 0 if (g.control.threat_frameworks or g.control.pci) else 1)[:5]]
 
+    # ---- posture: a short, plain-language narrative (list of paragraphs) ----
+    para1 = (f"{_humanize_profile(p)} \u2014 was assessed against the "
+             f"{counts['expected']} security controls expected for an application of this "
+             f"type (the controls such a system should have in place).")
+
+    gap_clause = (f"identified {counts['gaps']} gap(s) \u2014 {counts['not_present']} not "
+                  f"implemented and {counts['partial']} only partially implemented")
+    para2 = (f"The review confirmed {counts['implemented']} control(s) already in place and "
+             f"{gap_clause}.")
+    if n_unknown:
+        para2 += (f" A further {n_unknown} control(s) could not be confirmed from the "
+                  f"evidence provided and are flagged for verification \u2014 an unconfirmed "
+                  f"control is treated as a question to resolve, not a failure.")
+    else:
+        para2 += " Every expected control could be assessed from the evidence provided."
+
+    strong = [title for _, title in strengths[:3]]
+    gapt = [title for _, title, _ in key_gaps[:3]]
+    strong_phr = (f"Confirmed protections include {_join_natural(strong)}" if strong else "")
+    if len(gapt) == 1:
+        gap_phr = f"the single most important gap to close is {gapt[0]}"
+    elif gapt:
+        gap_phr = f"the most important gaps to close are {_join_natural(gapt)}"
+    else:
+        gap_phr = ""
+    if strong_phr and gap_phr:
+        para3 = f"{strong_phr}; {gap_phr}."
+    elif strong_phr:
+        para3 = f"{strong_phr}."
+    elif gap_phr:
+        para3 = gap_phr[0].upper() + gap_phr[1:] + "."
+    else:
+        para3 = ""
+
+    if r.pci_view.in_scope:
+        extra = (f" and {counts['pci_indeterminate']} require verification"
+                 if counts["pci_indeterminate"] else " and none require verification")
+        para4 = (f"Because the application handles cardholder data, it is in scope for PCI DSS "
+                 f"v4.0.1: {counts['pci_exposed']} requirement-mapped control(s) are currently "
+                 f"exposed{extra}.")
+    else:
+        para4 = ("The application does not handle cardholder data, so PCI DSS v4.0.1 is out of "
+                 "scope.")
+
+    posture = [para1, para2] + ([para3] if para3 else []) + [para4]
+
     notes = []
     if r.compensating:
         notes.append(f"{len(r.compensating)} compensating control(s) noted "
                      f"(these soften, but do not eliminate, a finding)")
     if n_unknown:
-        notes.append(f"{n_unknown} unknown control(s) need confirmation — treated as "
+        notes.append(f"{n_unknown} unknown control(s) need confirmation \u2014 treated as "
                      f"clarifications, not findings (unknown \u2260 missing)")
 
-    return {"posture": posture, "top_threats": top_threats, "key_gaps": key_gaps,
-            "strengths": strengths, "notes": notes,
+    return {"posture": posture, "counts": counts, "top_threats": top_threats,
+            "key_gaps": key_gaps, "strengths": strengths, "notes": notes,
             "all_confirmed": not (not_present or partial or n_unknown)}
 
 
 def _executive_summary(r: ThreatModelReport) -> list[str]:
     """Markdown executive summary, built from the shared summary_facts."""
     f = summary_facts(r)
-    lines = ["## Executive summary\n", f["posture"] + "\n"]
+    lines = ["## Executive summary\n"]
+    for para in f["posture"]:
+        lines.append(para + "\n")
     if f["top_threats"]:
         lines.append("**Top threats (by DREAD):**")
         for prio, avg, title, fw in f["top_threats"]:

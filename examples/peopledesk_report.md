@@ -8,7 +8,13 @@
 
 ## Executive summary
 
-PeopleDesk (web, cloud · llm · Restricted data) was assessed against 29 expected controls. The review identified 6 gap(s) (5 not in place, 1 partial), 4 confirmed in place, and 19 that could not be confirmed. PCI DSS v4.0.1 is out of scope.
+PeopleDesk — a web and cloud application with an LLM integration, handling data classified as Restricted — was assessed against the 29 security controls expected for an application of this type (the controls such a system should have in place).
+
+The review confirmed 4 control(s) already in place and identified 6 gap(s) — 5 not implemented and 1 only partially implemented. A further 19 control(s) could not be confirmed from the evidence provided and are flagged for verification — an unconfirmed control is treated as a question to resolve, not a failure.
+
+Confirmed protections include Centralized authentication / SSO, Data-at-rest encryption, and Strong transport encryption (TLS 1.2+); the most important gaps to close are Rate / spend limits on model endpoint, Prompt-injection defense, and LLM prompt/response logging.
+
+The application does not handle cardholder data, so PCI DSS v4.0.1 is out of scope.
 
 **Top threats (by DREAD):**
 - [Critical · 7.8] Rate / spend limits on model endpoint is not in place (LLM10:2025)

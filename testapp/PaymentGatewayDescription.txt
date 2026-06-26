@@ -1,0 +1,31 @@
+Purpose:  
+A hypothetical Payment Gateway web application hosted on AWS that accepts card payments from merchants, performs tokenization, and uses a simple LLM-based fraud detection utility to score transactions for potential fraud. The system is designed to meet PCI DSS constraints (cardholder data minimization, encryption in transit) while demonstrating realistic cloud components and integration points for threat modeling.
+
+Key components (summary):
+Edge: CloudFront + WAF for DDoS and basic web filtering.
+ALB: Routes HTTPS traffic to application containers.
+Application Tier: Containerized payment API (ECS/EKS) handling merchant requests, performing tokenization via a token service.
+LLM Fraud Service: Hosted as a model endpoint (SageMaker or containerized LLM) that receives transaction features and returns a fraud score. Asynchronous processing via SQS for non-blocking calls.
+Data Stores: RDS (Aurora) for transactional metadata and tokens; no raw PAN storage (tokenization enforced). S3 for receipts and backups.
+Secrets & Keys: AWS Secrets Manager for credentials; KMS for encryption keys.
+Networking: VPC with public/private subnets, NAT Gateway for outbound, VPC endpoints for S3/KMS.
+Observability & Security: CloudTrail, CloudWatch, GuardDuty, Inspector, AWS Shield, and logging pipeline (Kinesis -> S3/ELK).
+
+Data flow (high level)
+Merchant → HTTPS → CloudFront → ALB → Payment API
+Payment API validates request, tokenizes card data via token service (no PAN stored).
+Transaction features (non-sensitive) are sent to LLM Fraud Service (sync or via SQS for async).
+Fraud score returned → Payment API decides to accept/decline or route to manual review.
+Transaction metadata stored in RDS (tokens, merchant id, decision, audit trail).
+Logs and metrics forwarded to CloudWatch / Kinesis for monitoring and SIEM.
+
+Security controls included (explicit)
+-----------------------------------------------------------------------------------
+1. TLS everywhere (HTTPS to ALB; internal TLS between services recommended).
+2. Tokenization of card data; application stores tokens instead of PAN.
+3. KMS for key management; Secrets Manager for credentials.
+4. Private subnets for app and DB; public subnets only for ALB and bastion.
+5. WAF at edge and CloudFront for caching and basic filtering.
+6. CloudTrail and CloudWatch for audit logging.
+7. GuardDuty / Inspector for threat detection and vulnerability scanning.
+8. SQS decoupling between payment API and LLM to limit blast radius.
