@@ -149,3 +149,25 @@
   - scoped token
   - token exchange
   - rfc 8693
+- id: ASI-AUD-001
+  title: Agent tool-call and decision audit trail
+  intent: Every agent tool call, input snapshot, decision reason, write-back and approver is logged, not just
+    MCP calls.
+  guidance: When an agent takes an action, you need to reconstruct what it saw, what it decided and who approved
+    it. Log every tool or function call with its inputs, the reasoning or plan step that led to it, any data
+    written back and the approving human, whatever the tool transport.
+  layers:
+  - ai.llm_tools
+  - ai.agentic
+  stride:
+  - Repudiation
+  assessment_signal: Is every agent tool call logged with inputs, decision reason, write-back and approver?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  detect_keywords:
+  - tool call logging
+  - agent audit trail
+  - action log
+  notes: 'See also: MCP-LOG-001, AI-LOG-001.'

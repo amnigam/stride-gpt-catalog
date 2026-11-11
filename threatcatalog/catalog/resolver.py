@@ -24,11 +24,14 @@ PLATFORM_LAYER: dict[PlatformFacet, Layer] = {
     PlatformFacet.MOBILE: Layer.PLATFORM_MOBILE,
     PlatformFacet.MULTITENANT: Layer.PLATFORM_SAAS,
     PlatformFacet.API: Layer.PLATFORM_API,
+    PlatformFacet.MESSAGING: Layer.PLATFORM_MESSAGING,
+    PlatformFacet.CONTAINER: Layer.PLATFORM_CONTAINER,
 }
 
 # Each AI tier expands to the layers it inherits. MCP and agentic both build on
 # 'llm + tools'. Generative is a side-branch (output/provenance risk) that is
 # still LLM-based, so it inherits the LLM layer but not the tool/autonomy layers.
+# Training is the same shape: a model-building side-branch that inherits LLM.
 AI_INHERITS: dict[AICapability, list[Layer]] = {
     AICapability.NONE: [],
     AICapability.LLM: [Layer.AI_LLM],
@@ -36,6 +39,7 @@ AI_INHERITS: dict[AICapability, list[Layer]] = {
     AICapability.MCP: [Layer.AI_LLM, Layer.AI_LLM_TOOLS, Layer.AI_MCP],
     AICapability.AGENTIC: [Layer.AI_LLM, Layer.AI_LLM_TOOLS, Layer.AI_AGENTIC],
     AICapability.GENERATIVE: [Layer.AI_LLM, Layer.AI_GENERATIVE],
+    AICapability.TRAINING: [Layer.AI_LLM, Layer.AI_TRAINING],
 }
 
 

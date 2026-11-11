@@ -1,0 +1,29 @@
+# Training layer — apps that train or fine-tune their own models (AI capability: training).
+# OWASP LLM04:2025 data and model poisoning.
+- id: AI-TRAIN-001
+  title: Training data governance
+  intent: Training and fine-tuning data come from registered sources, are checked for tampering, versioned
+    and DLP-scanned, and pipelines run with least privilege and quotas.
+  guidance: A model learns whatever it is fed, including poisoned or personal data. Training sets should come
+    from approved sources, be versioned and integrity-checked, be scanned for sensitive data, and be processed
+    by pipelines with least-privilege access and compute quotas (OWASP LLM04:2025).
+  layers:
+  - ai.training
+  stride:
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Are training datasets from approved sources, versioned, integrity-checked and DLP-scanned,
+    with least-privilege pipelines?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM04:2025
+    version: '2025'
+  detect_keywords:
+  - training data
+  - fine-tuning dataset
+  - data poisoning
+  - dataset versioning
+  notes: 'See also: AI-MODEL-PROV-001, DATA-PRIV-001.'

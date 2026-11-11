@@ -211,3 +211,635 @@
   - vulnerable components
   - snyk
   - dependabot
+- id: IAM-MFA-001
+  title: Multi-factor and phishing-resistant authentication
+  intent: MFA is enforced for all users and admins, and is phishing-resistant for privileged or sensitive access.
+  guidance: A stolen password alone should never be enough to get in. Every user needs a second factor, and
+    admins or anyone touching sensitive data should use a phishing-resistant one (FIDO2/passkeys, smart cards)
+    rather than SMS or push codes that can be relayed or fatigue-bombed. SSO does not guarantee this on its
+    own.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  assessment_signal: Is MFA enforced for all users, and phishing-resistant MFA for admins and sensitive access?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  pci:
+  - requirement: 8.4.1
+  - requirement: 8.4.2
+  detect_keywords:
+  - mfa
+  - multi-factor
+  - fido2
+  - passkey
+  - phishing-resistant
+  notes: 'See also: IAM-SSO-001.'
+- id: IAM-PAM-001
+  title: Privileged access governance
+  intent: Privileged access is time-bound, separated by duty, brokered through PAM and periodically reviewed.
+  guidance: Admin rights are the keys to the kingdom. They should be granted just-in-time for a task and expire,
+    go through a privileged access management (PAM) tool that records sessions, keep separation of duties (no
+    one both requests and approves their own change), and be reviewed on a schedule.
+  layers:
+  - base
+  stride:
+  - ElevationOfPrivilege
+  assessment_signal: Is privileged access just-in-time, brokered through PAM, separated by duty and periodically
+    reviewed?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 5
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  pci:
+  - requirement: 7.2.2
+  - requirement: 10.2.1.2
+  detect_keywords:
+  - privileged access management
+  - just-in-time access
+  - cyberark
+  - break-glass
+  notes: 'See also: IAM-LPA-001, NET-MGMT-001.'
+- id: IAM-S2S-001
+  title: Service-to-service authentication (mTLS / workload identity)
+  intent: Internal, partner and integration calls authenticate the calling workload, not just its network location.
+  guidance: Being 'inside the network' is not proof of identity. Each service calling another should prove
+    who it is with mutual TLS, a workload identity (SPIFFE, cloud managed identity) or signed short-lived tokens,
+    so a compromised neighbour cannot impersonate a trusted caller.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  assessment_signal: Do internal and partner service calls authenticate the calling workload (mTLS, workload
+    identity, signed tokens)?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 12
+    version: '8.1'
+  pci:
+  - requirement: 8.6.1
+  detect_keywords:
+  - mtls
+  - mutual tls
+  - workload identity
+  - spiffe
+  - managed identity
+  notes: 'See also: API-AUTHN-001, ASI-AUTH-001, ASI-NHI-001.'
+- id: DATA-MASK-001
+  title: Data masking, tokenisation and field-level encryption
+  intent: Restricted and PCI fields are masked, tokenised or field-encrypted, with row and column access enforced.
+  guidance: Disk encryption does not stop the application, a DBA or an analyst from reading card numbers or
+    national IDs. The most sensitive fields should be tokenised or encrypted at field level and masked when
+    displayed, so only the few flows that truly need the clear value can see it.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are Restricted/PCI fields tokenised, field-encrypted or masked, with row/column-level
+    access enforced?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  pci:
+  - requirement: 3.4.1
+  - requirement: 3.5.1
+  detect_keywords:
+  - tokenisation
+  - tokenization
+  - field-level encryption
+  - data masking
+  - column-level encryption
+  notes: 'See also: DATA-ENC-001, DATA-CLS-001.'
+- id: DATA-LIFE-001
+  title: Data lifecycle, retention and disposal
+  intent: Retention periods, authorised sharing and secure deletion are defined across the app, logs, backups
+    and AI stores.
+  guidance: Data kept forever is data that can leak forever. Each data set should have a retention period tied
+    to a business or legal need, a defined list of who it may be shared with, and a secure deletion process
+    that also reaches logs, backups, caches, vector stores and model training sets.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are retention periods, authorised sharing and secure deletion defined for all data stores,
+    including logs, backups and AI stores?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  pci:
+  - requirement: 3.2.1
+  detect_keywords:
+  - retention policy
+  - data retention
+  - secure deletion
+  - data disposal
+  - crypto-shredding
+  notes: 'See also: DATA-CLS-001, LOG-RED-001, DATA-PRIV-001.'
+- id: LOG-RED-001
+  title: Log and telemetry redaction
+  intent: PII, secrets, tokens and prompts are masked before they reach logs and telemetry.
+  guidance: Logs are copied widely (SIEM, APM, support tools) and usually have looser access than the database.
+    Passwords, session tokens, card numbers, personal data and full AI prompts should be redacted or hashed
+    before they are written, otherwise the log pipeline becomes the easiest place to steal them.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are PII, secrets, tokens and prompts redacted before reaching logs and telemetry?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  pci:
+  - requirement: 3.3.1
+  detect_keywords:
+  - log redaction
+  - redact
+  - pii masking in logs
+  - log scrubbing
+  notes: 'See also: LOG-AUD-001, AI-LOG-001, DATA-LIFE-001.'
+- id: LOG-CORR-001
+  title: End-to-end correlation and security alerting
+  intent: A correlation ID travels across gateway, services, events, integrations and AI calls, and security
+    alerts have owners.
+  guidance: When something goes wrong, investigators need to follow one request across every hop. A correlation
+    or trace ID should be carried through the gateway, services, message bus, third-party calls and AI calls
+    and recorded in audit logs. Security-relevant events should raise alerts that a named team owns and responds
+    to.
+  layers:
+  - base
+  stride:
+  - Repudiation
+  assessment_signal: Is a correlation ID propagated end to end and recorded in audit logs, with owned security
+    alerts?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  pci:
+  - requirement: 10.4.1
+  detect_keywords:
+  - correlation id
+  - trace id
+  - distributed tracing
+  - opentelemetry
+  - siem alert
+  notes: 'See also: LOG-AUD-001, SAAS-LOG-001, AI-MON-001.'
+- id: EXT-TPR-001
+  title: Third-party integration and data-sharing approval
+  intent: Each outbound SaaS, data exchange, search or AI integration has a vendor review, an approved data
+    scope, contract terms and a verified endpoint.
+  guidance: Every external service the app talks to is a place your data goes and a party you trust. Before
+    go-live each one should pass vendor security review, have an agreed list of data it may receive, contract
+    terms covering security and breach notice, and a verified, pinned endpoint.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  - InformationDisclosure
+  assessment_signal: Does every third-party integration have a vendor review, an approved data scope, contract
+    terms and a verified endpoint?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 15
+    version: '8.1'
+  pci:
+  - requirement: 12.8.1
+  - requirement: 12.8.4
+  detect_keywords:
+  - vendor risk assessment
+  - third-party risk
+  - tprm
+  - data processing agreement
+  notes: 'See also: AI-ENDP-001, API-CONS-001.'
+- id: NET-EGRESS-001
+  title: Egress control and exfiltration protection
+  intent: Outbound traffic from apps, agents, tools and retrieval flows reaches only approved destinations,
+    with payload checks for sensitive data.
+  guidance: Most breaches end with data leaving. Outbound traffic should go through an egress gateway, proxy
+    or firewall policy that only allows approved destinations, and flows that can send data out (including
+    AI tool calls and retrieval) should be checked for sensitive content before it leaves.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Is outbound traffic (including agent tool calls and retrieval) restricted to approved
+    destinations with data-loss checks?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM06:2025
+    version: '2025'
+  pci:
+  - requirement: 1.3.2
+  detect_keywords:
+  - egress filtering
+  - egress gateway
+  - outbound allow-list
+  - dlp
+  notes: 'See also: CLD-SG-001, API-SSRF-001, AI-TOOL-001.'
+- id: RES-DEP-001
+  title: Dependency resilience and fail-safe behaviour
+  intent: Calls to dependencies use timeouts, bounded retries and circuit breakers, and fail closed rather
+    than bypassing security checks.
+  guidance: 'Every dependency will fail eventually. Calls to databases, IdPs, LLMs, guardrails and search should
+    have timeouts, limited retries and circuit breakers. The security point: if a security dependency (auth,
+    guardrail, fraud check) is down, the app must fail closed or route to manual review, never skip the check.'
+  layers:
+  - base
+  stride:
+  - DenialOfService
+  - Tampering
+  assessment_signal: Do dependency calls use timeouts, bounded retries and circuit breakers, and fail closed
+    when a security dependency is down?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - circuit breaker
+  - fail closed
+  - fail-safe
+  - bounded retries
+  notes: 'See also: API-RES-001, AI-RATE-001.'
+- id: RES-DR-001
+  title: Backup and recovery assurance
+  intent: Business-appropriate RPO/RTO are defined, backups are protected from tampering and restores are tested.
+  guidance: Ransomware and destructive attacks target backups first. Agree how much data loss (RPO) and downtime
+    (RTO) the business can tolerate, keep backups immutable or offline and separately access-controlled, and
+    prove on a schedule that restores actually work within those targets.
+  layers:
+  - base
+  stride:
+  - DenialOfService
+  - Tampering
+  assessment_signal: Are RPO/RTO defined, backups immutable and separately controlled, and restores tested
+    periodically?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 11
+    version: '8.1'
+  detect_keywords:
+  - immutable backup
+  - disaster recovery
+  - restore test
+  notes: 'See also: DATA-LIFE-001.'
+- id: IR-RESP-001
+  title: Application incident containment
+  intent: The app can detect, escalate and contain an incident, including revoking credentials and disabling
+    compromised integrations or agents.
+  guidance: When this app is breached, the team needs to act in minutes, not invent a plan. There should be
+    an app-specific runbook plus the technical levers to rotate its secrets, revoke tokens, disable a third-party
+    integration or agent, and isolate components without taking the whole service down.
+  layers:
+  - base
+  stride:
+  - ElevationOfPrivilege
+  - Repudiation
+  assessment_signal: Is there an app-specific incident runbook with the ability to revoke credentials and disable
+    integrations or agents?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 17
+    version: '8.1'
+  pci:
+  - requirement: 12.10.1
+  detect_keywords:
+  - incident response plan
+  - runbook
+  - playbook
+  - credential revocation
+  notes: 'See also: ASI-KILL-001, LOG-CORR-001.'
+- id: SDLC-SAST-001
+  title: SAST, DAST and secure code review in the pipeline
+  intent: First-party code is scanned with SAST and DAST and security-reviewed before release, with findings
+    gating deployment.
+  guidance: Third-party components are only part of the risk; most exploitable bugs are in your own code. Static
+    analysis (SAST) on every change, dynamic scanning (DAST) of the running app and peer review with a security
+    lens should run in the pipeline, with high-severity findings blocking release.
+  layers:
+  - base
+  stride:
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Are SAST, DAST and security code review run in the pipeline with high-severity findings
+    blocking release?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.2.3
+  - requirement: 6.2.4
+  detect_keywords:
+  - dast
+  - static analysis
+  - code scanning
+  - secure code review
+  notes: 'See also: SCA-SBOM-001, SEC-PENTEST-001.'
+- id: SDLC-PIPE-001
+  title: CI/CD pipeline and build integrity
+  intent: 'Source, pipeline and artifacts are protected: protected branches, scoped pipeline secrets, signed
+    artifacts and build provenance.'
+  guidance: Whoever controls the pipeline controls production. Require reviewed merges on protected branches,
+    keep pipeline credentials scoped and short-lived, sign build artifacts and record provenance (SLSA), and
+    only deploy what was built by the trusted pipeline.
+  layers:
+  - base
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Are branches protected, pipeline secrets scoped, and artifacts signed with build provenance
+    verified at deploy?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.5.1
+  detect_keywords:
+  - protected branch
+  - signed artifacts
+  - slsa
+  - build provenance
+  - sigstore
+  - cosign
+  notes: 'See also: SCA-SBOM-001, CTR-IMG-001, IMMUT-001.'
+- id: VULN-PATCH-001
+  title: Vulnerability and patch management with SLAs
+  intent: Vulnerabilities in code, components, images and hosts are tracked and fixed within severity-based
+    deadlines.
+  guidance: Finding a vulnerability is only useful if it gets fixed. Every finding from scanners, pentests
+    and vendor advisories should land in one tracked backlog with severity-based fix deadlines (for example
+    critical in days, high in weeks) and an exception process when a deadline cannot be met.
+  layers:
+  - base
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Are vulnerabilities tracked with severity-based remediation SLAs and an exception process?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 7
+    version: '8.1'
+  pci:
+  - requirement: 6.3.3
+  - requirement: 11.3.1
+  detect_keywords:
+  - patch management
+  - remediation sla
+  - vulnerability management
+  notes: 'See also: SCA-SBOM-001, ONP-HARD-001.'
+- id: SEC-PENTEST-001
+  title: Pre-go-live penetration test and retest
+  intent: An independent penetration test is run before go-live and after significant change, and findings
+    are retested.
+  guidance: Automated scanners miss business-logic and chained attacks. An independent tester should attack
+    the app before it goes live and after major changes, and fixes should be retested and signed off rather
+    than assumed.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  - Tampering
+  - Repudiation
+  - InformationDisclosure
+  - DenialOfService
+  - ElevationOfPrivilege
+  assessment_signal: Is an independent penetration test planned before go-live and after major change, with
+    retest of findings?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 18
+    version: '8.1'
+  pci:
+  - requirement: 11.4.1
+  detect_keywords:
+  - penetration test
+  - pentest
+  - pen test
+  notes: 'See also: SDLC-SAST-001, AI-EVAL-001, SAAS-LEAK-001.'
+- id: ERR-HAND-001
+  title: Secure error handling
+  intent: Errors return generic messages to callers; stack traces, queries and internal details stay in server
+    logs.
+  guidance: 'Detailed error pages hand attackers a map: framework versions, SQL fragments, file paths and internal
+    hostnames. Users and API clients should get a generic message and a reference ID, while the detail goes
+    to server-side logs.'
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Do errors return generic messages to callers, with stack traces and internals kept server-side?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.2.4
+  detect_keywords:
+  - generic error
+  - error handling
+  - no stack trace
+  notes: 'See also: LOG-RED-001.'
+- id: DATA-CRYPTO-001
+  title: Approved cryptography and certificate lifecycle
+  intent: Only approved algorithms and libraries are used, no custom crypto, and keys and certificates are
+    inventoried and rotated before expiry.
+  guidance: Weak or home-made cryptography quietly undoes encryption elsewhere. Use approved algorithms and
+    vetted libraries, keep an inventory of keys and certificates with owners, rotate on schedule, and alert
+    well before certificates expire (expiry is also a common outage).
+  layers:
+  - base
+  stride:
+  - Spoofing
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Are only approved algorithms used, with keys and certificates inventoried, rotated and
+    monitored for expiry?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  pci:
+  - requirement: 3.6.1
+  - requirement: 4.2.1
+  detect_keywords:
+  - approved algorithms
+  - certificate management
+  - key rotation
+  - crypto inventory
+  notes: 'See also: CLD-KMS-001, DATA-TLS-001, DATA-ENC-001.'
+- id: IAM-LCM-001
+  title: Identity lifecycle and access recertification
+  intent: App access is granted, changed and removed with joiner/mover/leaver events, and all access is recertified
+    periodically.
+  guidance: People change roles and leave; their access often stays behind. App roles should be provisioned
+    and removed automatically from HR or IdP events, dormant accounts disabled, and every user's access recertified
+    by a manager on a schedule, not only privileged access.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  - ElevationOfPrivilege
+  assessment_signal: Is app access provisioned and removed via joiner/mover/leaver events and recertified periodically?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 5
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  pci:
+  - requirement: 7.2.4
+  - requirement: 8.2.6
+  detect_keywords:
+  - access review
+  - recertification
+  - joiner mover leaver
+  - scim
+  notes: 'See also: IAM-SSO-001, IAM-PAM-001.'
+- id: IAM-ATO-001
+  title: Account recovery and account-takeover protection
+  intent: 'Password reset, MFA reset and login are protected against takeover: credential stuffing defences,
+    lockout and verified recovery.'
+  guidance: Attackers rarely break strong authentication head-on; they reset it. Account recovery and MFA re-enrolment
+    need strong identity verification and notification to the user, and login needs defences against credential
+    stuffing (breached-password checks, lockout or throttling, anomaly detection).
+  layers:
+  - base
+  stride:
+  - Spoofing
+  assessment_signal: Are account recovery and MFA reset strongly verified, and login protected against credential
+    stuffing?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  pci:
+  - requirement: 8.3.4
+  - requirement: 8.3.6
+  detect_keywords:
+  - account takeover
+  - credential stuffing
+  - account recovery
+  - breached password
+  notes: 'See also: IAM-MFA-001, BIZ-ABUSE-001.'
+- id: DATA-RES-001
+  title: Data residency and cross-border transfer
+  intent: Where data, backups, logs and model calls are processed and stored is known and meets residency and
+    transfer rules.
+  guidance: Regulators care where data physically goes, not just whether it is encrypted (for example the DPDP
+    Act and RBI payment-data localisation in India, GDPR in Europe). Map the region of every store, backup,
+    log sink, support tool and AI endpoint, and confirm cross-border transfers are allowed.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are storage and processing regions (including backups, logs and AI endpoints) mapped and
+    compliant with residency rules?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - data residency
+  - data localisation
+  - data localization
+  - cross-border transfer
+  notes: 'See also: AI-ENDP-001, EXT-TPR-001.'
+- id: DATA-PRIV-001
+  title: Privacy by design and data subject rights
+  intent: A privacy impact assessment is done, consent and purpose are recorded, and access, correction and
+    erasure requests can be fulfilled.
+  guidance: Personal data brings legal duties beyond security. A privacy impact assessment should be completed
+    before build, consent and purpose captured, and the app able to find, export, correct and erase one person's
+    data on request across all stores.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Has a privacy impact assessment been done, and can the app fulfil access, correction and
+    erasure requests?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - privacy impact assessment
+  - dpia
+  - consent management
+  - data subject request
+  - right to erasure
+  notes: 'See also: DATA-LIFE-001, DATA-CLS-001.'
+- id: DATA-NONPROD-001
+  title: Production data kept out of non-production
+  intent: Real customer data is not used in dev or test unless masked or synthetic, and non-prod is isolated
+    from prod.
+  guidance: Development and test environments have weaker controls and broader access. They should use synthetic
+    or irreversibly masked data, never live card numbers or customer records, and should not have network paths
+    or credentials into production.
+  layers:
+  - base
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are dev/test environments free of unmasked production data and isolated from production?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.5.5
+  - requirement: 6.5.6
+  detect_keywords:
+  - synthetic data
+  - masked test data
+  - no production data in test
+  notes: 'See also: DATA-MASK-001.'
+- id: NET-MGMT-001
+  title: Management and admin plane isolation
+  intent: Admin consoles, SSH/RDP and database or broker admin ports are reachable only through a bastion or
+    PAM, never from the internet.
+  guidance: Management interfaces are the shortest path to full control. They should sit on a separate network
+    or behind a bastion/PAM gateway with MFA, never exposed to the internet, and be distinct from the paths
+    ordinary users take.
+  layers:
+  - base
+  stride:
+  - Spoofing
+  - ElevationOfPrivilege
+  assessment_signal: Are admin consoles and management ports reachable only via bastion/PAM and never from
+    the internet?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 12
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  pci:
+  - requirement: 2.2.7
+  detect_keywords:
+  - bastion
+  - jump host
+  - management network
+  - admin plane
+  notes: 'See also: IAM-PAM-001, CLD-SG-001, ONP-FW-001.'
