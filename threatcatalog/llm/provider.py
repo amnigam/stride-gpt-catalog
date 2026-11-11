@@ -19,6 +19,7 @@ silently absorbed.
 from __future__ import annotations
 
 import json
+import re
 from typing import Protocol
 
 
@@ -84,7 +85,7 @@ class OpenAIRawLLM:
     """
 
     def __init__(self, api_key: str | None = None, model: str = "gpt-5.2",
-                 base_url: str | None = None, max_tokens: int = 4096):
+                 base_url: str | None = None, max_tokens: int = 32000):
         self.model = model
         self.max_tokens = max_tokens
         self._api_key = api_key
@@ -116,7 +117,7 @@ class OpenAIRawLLM:
         resp = self._create(self._client(),
                             [{"role": "system", "content": system},
                              {"role": "user", "content": user}])
-        return _parse_json(resp.choices[0].message.content or "")
+        return _parse_json(_content_or_raise(resp, self.model))
 
     def complete_json_image(self, system: str, user: str, image_b64: str,
                             media_type: str = "image/png") -> dict | list:
@@ -126,7 +127,7 @@ class OpenAIRawLLM:
                                  {"type": "text", "text": user},
                                  {"type": "image_url",
                                   "image_url": {"url": f"data:{media_type};base64,{image_b64}"}}]}])
-        return _parse_json(resp.choices[0].message.content or "")
+        return _parse_json(_content_or_raise(resp, self.model))
 
 
 class StubRawLLM:
@@ -153,11 +154,51 @@ class StubRawLLM:
         return self._fixed
 
 
+class EmptyCompletionError(RuntimeError):
+    """The model returned no visible text. Carries the reason, which is the
+    whole diagnostic value: `length` means the token budget was exhausted
+    (on reasoning models, by reasoning tokens); `content_filter` or a non-null
+    refusal means a policy block, and no budget increase will help."""
+
+
+def _content_or_raise(resp, model: str) -> str:
+    """Pull message content, or fail with *why* it was empty."""
+    choice = resp.choices[0]
+    text = choice.message.content
+    if text and text.strip():
+        return text
+    usage = getattr(resp, "usage", None)
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning = getattr(details, "reasoning_tokens", None)
+    raise EmptyCompletionError(
+        f"{model} returned no content "
+        f"(finish_reason={choice.finish_reason!r}, "
+        f"refusal={getattr(choice.message, 'refusal', None)!r}, "
+        f"completion_tokens={getattr(usage, 'completion_tokens', None)}, "
+        f"reasoning_tokens={reasoning}). "
+        "finish_reason='length' means the max_tokens budget was consumed before "
+        "any visible output — raise max_tokens or reduce the gap size.")
+
+
+_FENCE_OPEN = re.compile(r"^```[A-Za-z0-9_+-]*[ \t]*\r?\n?")
+_FENCE_CLOSE = re.compile(r"\r?\n?```\s*$")
+
+
 def _parse_json(text: str) -> dict | list:
-    text = text.strip()
+    text = text.lstrip("\ufeff\u200b").strip()
+    if not text:
+        raise ValueError("model returned an empty string")
     if text.startswith("```"):
-        text = text.split("```", 2)[1]
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    return json.loads(text)
+        text = _FENCE_CLOSE.sub("", _FENCE_OPEN.sub("", text)).strip()
+    if not text.startswith(("{", "[")):
+        # tolerate a prose preamble: seek the first structural character
+        starts = [i for i in (text.find("{"), text.find("[")) if i != -1]
+        if not starts:
+            raise ValueError(f"no JSON found in model output: {text[:200]!r}")
+        text = text[min(starts):]
+    # raw_decode parses the first complete value and ignores anything trailing
+    # (a stray closing fence, a sign-off sentence), which json.loads rejects.
+    obj, _end = json.JSONDecoder().raw_decode(text)
+    if not isinstance(obj, (dict, list)):
+        raise ValueError(f"model output was not a JSON object or array: {text[:200]!r}")
+    return obj

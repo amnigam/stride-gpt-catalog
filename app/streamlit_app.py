@@ -36,7 +36,8 @@ st.caption(f"Catalog loaded: {len(catalog)} controls across all layers.")
 DEFAULT_MODEL = {"OpenAI (ChatGPT)": "gpt-5.2", "Anthropic (Claude)": "claude-sonnet-4-6"}
 
 
-def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = ""):
+def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = "",
+                 max_tokens: int = 32000):
     """Return an ArtifactEngine for the chosen provider, or None for offline.
 
     api_key (from the UI) overrides the environment variable when provided;
@@ -45,10 +46,12 @@ def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = 
     if choice == "OpenAI (ChatGPT)":
         from threatcatalog.llm import LLMArtifactEngine, OpenAIRawLLM
         return LLMArtifactEngine(OpenAIRawLLM(model=model_id, api_key=api_key or None,
-                                              base_url=base_url or None))
+                                              base_url=base_url or None,
+                                              max_tokens=max_tokens))
     if choice == "Anthropic (Claude)":
         from threatcatalog.llm import AnthropicRawLLM, LLMArtifactEngine
-        return LLMArtifactEngine(AnthropicRawLLM(model=model_id, api_key=api_key or None))
+        return LLMArtifactEngine(AnthropicRawLLM(model=model_id, api_key=api_key or None,
+                                                max_tokens=max_tokens))
     return None  # Deterministic (offline) — pipeline default
 
 
@@ -60,6 +63,7 @@ with st.sidebar:
         help="Deterministic needs no API key. OpenAI/Anthropic build the "
              "narrative with the model you name below, and read the diagram.")
     model_id, api_key, base_url = "", "", ""
+    max_out_tokens = 32000
     if engine_choice != "Deterministic (offline)":
         model_id = st.text_input("Model id", DEFAULT_MODEL[engine_choice],
                                  help="e.g. gpt-5.2, gpt-4o, claude-sonnet-4-6 — "
@@ -70,6 +74,11 @@ with st.sidebar:
         if engine_choice.startswith("OpenAI"):
             base_url = st.text_input("API base URL (optional)",
                                      help="For an org gateway / Azure endpoint. Blank = default OpenAI.")
+        max_out_tokens = st.number_input(
+            "Max output tokens", min_value=4096, max_value=128000, value=32000, step=4096,
+            help="On reasoning models (GPT-5 / o-series) this budget covers reasoning "
+                 "tokens as well as visible output. Wide facet sets (mcp + agentic) need "
+                 "far more than the old 4096 default or the model returns nothing.")
 
     st.header("1 · Application facets")
     name = st.text_input("Application name", "PeopleDesk")
@@ -111,7 +120,8 @@ if st.button("🔍 Detect controls from diagram + description"):
         detected[e.control_id] = (e.status.value, "description")
     if diagram_image is not None and engine_choice != "Deterministic (offline)":
         try:
-            eng = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url)
+            eng = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
+                               max_tokens=max_out_tokens)
             for e in eng.extract_controls(expected, diagram_image, diagram_media_type):
                 detected[e.control_id] = (e.status.value, "diagram")   # vision wins over text
         except Exception as exc:                 # noqa: BLE001 — surface vision/auth errors, keep text detection
@@ -163,7 +173,8 @@ if st.button("Run threat model", type="primary"):
         st.warning("You uploaded a diagram but didn't click Detect — it won't be read. "
                    "Click Detect first to pull controls from the image.")
     try:
-        engine = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url)
+        engine = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
+                              max_tokens=max_out_tokens)
     except Exception as exc:                       # noqa: BLE001
         st.error(f"Could not initialize {engine_choice}: {exc}")
         st.stop()

@@ -69,6 +69,22 @@ This is the SaaS differentiation made explicit: the `multitenant` facet is what
 separates a true SaaS product (tenant data isolation, per-tenant authz, tenant
 quotas, cross-tenant leakage testing) from a single-tenant web app.
 
+**Facet breadth drives run size**, and it is worth knowing the scale before you
+pick. Because AI tiers inherit downward, selecting the full AI stack resolves
+most of the catalog at once:
+
+| Facets | Layers | Expected controls |
+| --- | --- | --- |
+| `web` + `cloud` | 3 | 20 |
+| `web` + `cloud` + `multitenant` | 4 | 25 |
+| `web` + `cloud` + `llm` | 4 | 29 |
+| `web` + `cloud` + `mcp,llm,llm_tools,agentic` | 7 | **44 of 61** |
+
+The whole gap goes into every prompt, and the model is asked for one record per
+not-present/partial control. A wide AI profile therefore needs a much larger
+output-token budget than a plain web app — see
+[Model output budget](#model-output-budget-read-this-before-a-wide-ai-profile).
+
 ---
 
 ## Architecture
@@ -140,7 +156,8 @@ uv run streamlit run app/streamlit_app.py
 ```
 
 1. Pick the engine (defaults to **OpenAI / gpt-5.2**) and paste your key, or set
-   `OPENAI_API_KEY` in the environment.
+   `OPENAI_API_KEY` in the environment. Set **API base URL** if you go through an
+   org gateway or Azure, and raise **Max output tokens** for wide AI facet sets.
 2. Choose facets, write the architecture description, optionally upload an
    architecture diagram.
 3. **Detect controls** — reads the description (keywords) and the diagram (vision,
@@ -197,8 +214,53 @@ report = pipeline.run(profile, ..., engine=engine)
 ```
 
 `OpenAIRawLLM` accepts `api_key=` and `base_url=` (for an org gateway / Azure),
-and tolerates either `max_tokens` or `max_completion_tokens` automatically, so
-newer GPT-5/o-series models work unchanged.
+`max_tokens=` (default **32000**), and tolerates either `max_tokens` or
+`max_completion_tokens` automatically, so newer GPT-5/o-series models work
+unchanged.
+
+---
+
+## Model output budget (read this before a wide AI profile)
+
+On reasoning models — the GPT-5 and o-series families — `max_completion_tokens`
+is a budget for **reasoning tokens plus visible output**, not for output alone.
+A model can spend the entire allowance thinking and return an empty string, with
+`finish_reason="length"` and no content at all. Non-reasoning models like gpt-4o
+spend the whole budget on visible output and so tolerate a much smaller number.
+
+That is why the default is **32000** rather than something tighter. A
+`mcp + llm + llm_tools + agentic` profile puts 44 controls into every prompt and
+asks for a record per gap, across four separate calls (`generate_threats`,
+`generate_recommendations`, `generate_mitigations`, `score_dread`) plus one per
+observed out-of-catalog control. Each call pays that cost independently.
+
+Set it in the sidebar, or in code:
+
+```python
+engine = LLMArtifactEngine(OpenAIRawLLM(model="gpt-5.2", max_tokens=32000))
+```
+
+An empty completion is now a typed failure rather than a parse error.
+`EmptyCompletionError` reports `finish_reason`, any `refusal`, and the
+`reasoning_tokens` actually consumed, which is what tells the two causes apart:
+
+* `finish_reason='length'` with high `reasoning_tokens` — budget exhausted.
+  Raise `max_tokens`, or narrow the facet set.
+* `finish_reason='content_filter'`, or a non-null `refusal` — a policy block.
+  No budget increase will help.
+
+Model output is also parsed defensively. Fenced blocks with any language tag
+(`json`, `JSON`, `jsonc`, bare), a prose preamble before the JSON, a trailing
+sign-off after it, and a leading BOM are all tolerated; genuinely empty or
+prose-only output raises a message naming what came back instead.
+
+### If your gateway clamps the budget
+
+Some org gateways silently cap `max_completion_tokens` below what you request.
+If `EmptyCompletionError` still reports `finish_reason='length'` after you raise
+it, that is the signal. Batch `_gap_payload` into slices of ~15 controls and
+merge the resulting lists — `_listify` in `llm/engine.py` already tolerates the
+shape, since it accepts both a bare array and a `{"threats": [...]}` wrapper.
 
 ---
 
