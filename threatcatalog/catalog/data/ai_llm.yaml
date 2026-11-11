@@ -108,19 +108,27 @@
     ref: Control 6
     version: '8.1'
 - id: AI-LOG-001
-  title: LLM prompt/response logging
-  intent: Prompts and responses are logged for audit and incident reconstruction.
+  title: LLM prompt/response logging and decision traceability
+  intent: Prompts and responses are logged for audit and incident reconstruction, and every AI output can
+    be traced to its model, prompt and guardrail versions, retrieved sources, user and business record.
   guidance: Log prompts and responses (with appropriate redaction) so AI-driven actions can be audited
-    and incidents reconstructed. Treat this like any other security-relevant event stream.
+    and incidents reconstructed. Treat this like any other security-relevant event stream. Each entry should
+    also record the model, prompt and guardrail versions in force and the IDs of any retrieved documents or
+    index versions, so you can explain later why the AI produced a given answer for a given user and record.
   layers:
   - ai.llm
   stride:
   - Repudiation
-  assessment_signal: Are model prompts and responses logged to the audit pipeline?
+  assessment_signal: Are model prompts and responses logged to the audit pipeline, with model/prompt/guardrail
+    versions and retrieved source IDs so each output is traceable?
+  notes: Absorbs the proposed AI-LIN-001 (AI decision traceability) and AI-RAG-LIN-001 (RAG retrieval lineage).
+    See also LOG-RED-001, ASI-AUD-001.
   detect_keywords:
   - llm logging
   - prompt logging
   - model audit log
+  - ai traceability
+  - retrieval lineage
   threat_frameworks:
   - framework: cis_v8
     ref: Control 8
@@ -205,3 +213,242 @@
   - weights verification
   - model supply chain
   - pinned model
+- id: AI-GOV-001
+  title: AI system and model governance
+  intent: The AI use case, models, providers, owner, data classes and autonomy level are registered and approved,
+    preventing shadow AI.
+  guidance: Before an AI feature reaches ARB, someone should be able to say what it does, which models and
+    providers it uses, what data it sees, how autonomous it is and who owns it. Model calls should only reach
+    approved endpoints through the AI gateway.
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Is the AI use case registered and approved, with models, providers, data classes, autonomy
+    level and owner recorded?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 2
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM03:2025
+    version: '2025'
+  detect_keywords:
+  - ai registry
+  - model inventory
+  - ai use case approval
+  - ai gateway
+  notes: 'See also: AI-ENDP-001, AI-MODEL-PROV-001.'
+- id: AI-CFG-001
+  title: AI model, prompt and guardrail change control
+  intent: System prompts, guardrails, model versions, retrieval settings and tool permissions are version-controlled
+    and changed only through approval.
+  guidance: Changing a system prompt or swapping a model can change what the app will do as much as a code
+    change. Keep prompts, guardrail rules, model versions and tool permissions in version control, require
+    review to change them, and re-run security evaluation after material changes.
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  assessment_signal: Are prompts, guardrails, model versions and tool permissions version-controlled and changed
+    only via approval?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+  pci:
+  - requirement: 6.5.1
+  detect_keywords:
+  - prompt versioning
+  - prompt registry
+  - guardrail configuration
+  - model version pinning
+  notes: 'See also: AI-MODEL-PROV-001, AI-EVAL-001.'
+- id: AI-SPL-001
+  title: System prompt leakage protection
+  intent: System prompts contain no secrets or sensitive policy, and prompt extraction is resisted and tested.
+  guidance: Assume users can eventually get the model to reveal its system prompt. Keep credentials, internal
+    URLs and sensitive business rules out of it, enforce real controls outside the model, and test extraction
+    attempts (OWASP LLM07:2025).
+  layers:
+  - ai.llm
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are system prompts free of secrets and sensitive policy, with prompt-extraction resistance
+    tested?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM07:2025
+    version: '2025'
+  detect_keywords:
+  - system prompt leakage
+  - prompt extraction
+  notes: 'See also: SEC-SECRETS-001, AI-OUT-001.'
+- id: AI-EVAL-001
+  title: AI security evaluation and red teaming
+  intent: Prompt injection, jailbreaks, unauthorised tool use, sensitive disclosure and guardrail bypass are
+    tested before release, with evidence.
+  guidance: AI behaviour cannot be proven safe by reading the code. Run adversarial tests (direct and indirect
+    prompt injection, jailbreaks, data extraction, tool misuse) before release and after material changes,
+    and keep the results as evidence. At ARB the test plan is the evidence; at go-live, the results.
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Is adversarial AI testing (injection, jailbreak, tool misuse, disclosure) planned and
+    evidenced before release?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 18
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM01:2025
+    version: '2025'
+  pci:
+  - requirement: 11.4.1
+  detect_keywords:
+  - red team
+  - red-teaming
+  - adversarial testing
+  - jailbreak testing
+  - garak
+  - pyrit
+  notes: 'See also: AI-PI-001, SEC-PENTEST-001.'
+- id: AI-OUT-ACT-001
+  title: AI output validation before action
+  intent: AI outputs are validated against schema, authorisation and business rules before driving commands,
+    API calls or data changes; low-confidence results go to a human.
+  guidance: Model output is untrusted input to whatever consumes it. Before it becomes a database write, an
+    API call, a shell command or a business decision, validate it against a schema and the business rules,
+    check the caller is allowed to do it, and route low-confidence or conflicting results to a person (OWASP
+    LLM05:2025).
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Are AI outputs validated against schema, authorisation and business rules before they
+    drive actions, with human review for low-confidence cases?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM05:2025
+    version: '2025'
+  detect_keywords:
+  - output validation
+  - improper output handling
+  - human review
+  notes: 'See also: AI-OUT-001, AI-TOOL-002, ASI-HITL-001.'
+- id: AI-SRC-001
+  title: External content provenance and trust
+  intent: Web and search content is trust-scored, cross-checked and sanitised before it reaches the model,
+    especially for sensitive decisions.
+  guidance: Retrieved web pages can be wrong, stale or planted. Restrict sources to trusted domains where possible,
+    record where each piece of content came from, cross-check facts used for sensitive decisions and strip
+    hidden instructions before the content reaches the model.
+  layers:
+  - ai.llm
+  stride:
+  - Spoofing
+  - Tampering
+  assessment_signal: Is externally retrieved content source-restricted, provenance-tracked and sanitised before
+    reaching the model?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM01:2025
+    version: '2025'
+  - framework: owasp_llm
+    ref: LLM09:2025
+    version: '2025'
+  detect_keywords:
+  - source allow-list
+  - content provenance
+  - trusted sources
+  notes: 'See also: AI-PI-001.'
+- id: AI-RAG-ING-001
+  title: RAG ingestion integrity
+  intent: Documents entering a vector index are approved, scanned, tracked to their source and versioned, to
+    defend against poisoning.
+  guidance: Whatever gets into the index can steer the model's answers. Only ingest from approved sources,
+    scan documents for malicious or hidden content, record source and version for each chunk, and restrict
+    who can add or change indexed content (OWASP LLM04 and LLM08:2025).
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  assessment_signal: Is RAG ingestion restricted to approved sources, scanned, versioned and source-tracked?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM04:2025
+    version: '2025'
+  - framework: owasp_llm
+    ref: LLM08:2025
+    version: '2025'
+  detect_keywords:
+  - ingestion pipeline
+  - document provenance
+  - rag poisoning
+  notes: 'See also: AI-VEC-001.'
+- id: AI-MON-001
+  title: AI runtime alerting
+  intent: Alerts fire on limit breaches, token or cost spikes, model or search failures and policy violations.
+  guidance: Limits and logs only help if someone notices. Alert the owning team on guardrail violations, repeated
+    injection attempts, token or cost spikes, unusual tool use and model or retrieval outages.
+  layers:
+  - ai.llm
+  stride:
+  - DenialOfService
+  - Repudiation
+  assessment_signal: Do alerts fire on AI policy violations, token/cost spikes and model or retrieval failures,
+    to an owning team?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM10:2025
+    version: '2025'
+  detect_keywords:
+  - ai monitoring
+  - llm observability
+  - token usage alert
+  - guardrail alert
+  notes: 'See also: AI-RATE-001, AI-LOG-001, LOG-CORR-001.'
+- id: AI-TRANS-001
+  title: AI transparency, grounding and overreliance
+  intent: Users know when they are dealing with AI, answers cite their sources, and high-stakes answers carry
+    limits or require confirmation.
+  guidance: People over-trust confident AI answers. Tell users when content is AI-generated, ground answers
+    in cited sources they can check, and make clear when an answer should not be relied on without confirmation
+    (OWASP LLM09:2025).
+  layers:
+  - ai.llm
+  stride:
+  - Tampering
+  assessment_signal: Are users told when content is AI-generated, with cited sources and caveats on high-stakes
+    answers?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_llm
+    ref: LLM09:2025
+    version: '2025'
+  detect_keywords:
+  - ai disclosure
+  - citations
+  - overreliance
+  notes: 'See also: AI-OUT-ACT-001.'

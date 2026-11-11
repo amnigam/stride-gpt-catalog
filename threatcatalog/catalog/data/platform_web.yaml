@@ -105,3 +105,157 @@
   - framework: cis_v8
     ref: Control 13
     version: '8.1'
+- id: BIZ-TXN-001
+  title: Business transaction integrity
+  intent: Sensitive transactions are validated server-side with enforced state transitions, idempotency and
+    replay prevention.
+  guidance: Payments, transfers and approvals must follow the business rules no matter what the client sends.
+    The server should enforce the allowed state transitions (no skipping from 'created' to 'paid'), recompute
+    amounts, use idempotency keys so retries do not double-charge, and reject replayed requests.
+  layers:
+  - platform.web
+  - platform.api
+  stride:
+  - Tampering
+  - Repudiation
+  assessment_signal: Are sensitive transactions validated server-side with enforced state transitions, idempotency
+    keys and replay prevention?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - idempotency key
+  - state machine
+  - transaction integrity
+  - replay prevention
+  notes: 'See also: IN-VAL-001, MSG-REPLAY-001, BIZ-ABUSE-001.'
+- id: BIZ-ABUSE-001
+  title: Business workflow abuse prevention
+  intent: Sensitive business flows are protected against automation, velocity attacks and logic manipulation.
+  guidance: Rate limits count requests; abuse prevention protects a business flow. Sign-ups, coupon redemptions,
+    OTP sends, bookings and payouts need flow-level limits, velocity rules and fraud signals, because attackers
+    use perfectly valid requests at scale (OWASP API6:2023).
+  layers:
+  - platform.web
+  - platform.api
+  stride:
+  - Tampering
+  - DenialOfService
+  assessment_signal: Are sensitive business flows protected with flow-level limits, velocity rules and fraud
+    or bot signals?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_api
+    ref: API6:2023
+    version: '2023'
+  detect_keywords:
+  - velocity check
+  - fraud detection
+  - business logic abuse
+  - anti-automation
+  notes: 'See also: WEB-RATE-001, API-RES-001, WEB-DDOS-001.'
+- id: WEB-DDOS-001
+  title: DDoS protection and bot mitigation
+  intent: Edge DDoS protection and bot detection protect login, APIs and sensitive flows.
+  guidance: A WAF and rate limits do not absorb a volumetric flood. Internet-facing apps need an edge DDoS
+    service (CDN or scrubbing provider) and bot management that can tell real users from scripted traffic on
+    login and other high-value endpoints.
+  layers:
+  - platform.web
+  - platform.api
+  stride:
+  - DenialOfService
+  assessment_signal: Is the app fronted by edge DDoS protection and bot mitigation?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  detect_keywords:
+  - ddos protection
+  - bot management
+  - anti-ddos
+  - cloudflare
+  - akamai
+  - shield advanced
+  notes: 'See also: WEB-WAF-001, WEB-RATE-001.'
+- id: FILE-ING-001
+  title: Secure file ingestion and processing
+  intent: Uploaded files and archives are type-checked, malware-scanned, parsed safely in isolation and stored
+    outside the web root.
+  guidance: File uploads carry malware, parser exploits, zip bombs and polyglot files that field validation
+    never sees. Check type by content not extension, cap size and archive depth, scan for malware, process
+    in an isolated worker and store files where they cannot be executed or served directly.
+  layers:
+  - platform.web
+  - platform.api
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Are uploaded files type-checked, malware-scanned, processed in isolation and stored outside
+    the web root?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 10
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 5.2.1
+  detect_keywords:
+  - file upload validation
+  - malware scan
+  - antivirus scan
+  - content disarm
+  notes: 'See also: IN-VAL-001.'
+- id: WEB-SCRIPT-001
+  title: Client-side script integrity
+  intent: Scripts loaded on sensitive pages are inventoried, authorised and integrity-checked, with tamper
+    detection.
+  guidance: Skimming attacks inject a few lines of JavaScript into a payment page through a compromised third-party
+    script. Keep an inventory of every script on sensitive pages, justify each one, enforce integrity (Subresource
+    Integrity, strict CSP) and monitor for unauthorised changes (PCI DSS 6.4.3 and 11.6.1).
+  layers:
+  - platform.web
+  stride:
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Are scripts on payment and sensitive pages inventoried, integrity-checked and monitored
+    for tampering?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.4.3
+  - requirement: 11.6.1
+  detect_keywords:
+  - subresource integrity
+  - script inventory
+  - magecart
+  - client-side monitoring
+  notes: 'See also: WEB-HDR-001.'
+- id: WEB-CORS-001
+  title: CORS policy
+  intent: Cross-origin access is limited to an explicit allow-list of origins; credentials are never allowed
+    with wildcard or reflected origins.
+  guidance: A permissive CORS policy lets any website a user visits read their data from your app. Allow only
+    named origins, never reflect the request origin back, and never combine wildcard origins with credentials.
+  layers:
+  - platform.web
+  stride:
+  - InformationDisclosure
+  assessment_signal: Is CORS restricted to an explicit origin allow-list with no reflected or wildcard origins
+    on credentialed requests?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - cors policy
+  - cors allow-list
+  - access-control-allow-origin
+  notes: 'See also: WEB-HDR-001, WEB-CSRF-001.'

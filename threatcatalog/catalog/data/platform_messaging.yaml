@@ -1,0 +1,162 @@
+# Messaging layer — event buses, queues and batch file transfer (facet: messaging).
+# PCI requirement IDs are ILLUSTRATIVE seed mappings; verify against PCI DSS v4.0.1.
+- id: MSG-AUTH-001
+  title: Broker authentication and topic access control
+  intent: Every producer and consumer authenticates to the broker with its own identity, and topic ACLs grant
+    least privilege.
+  guidance: If anything on the network can publish to a topic, anyone can forge a 'payment approved' event.
+    Each producer and consumer should authenticate to the broker with its own identity (mTLS, SASL, cloud IAM),
+    and each topic or queue should allow write only by its owner and read only by the consumers that need it.
+  layers:
+  - platform.messaging
+  stride:
+  - Spoofing
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Does each producer/consumer have its own broker identity, with per-topic least-privilege
+    ACLs?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  detect_keywords:
+  - topic acl
+  - sasl
+  - broker authentication
+  - queue policy
+  notes: 'See also: IAM-S2S-001, IAM-LPA-001.'
+- id: MSG-INT-001
+  title: Message integrity and payload confidentiality
+  intent: Messages are signed or integrity-protected, and sensitive payloads are encrypted end to end, not
+    only on the wire.
+  guidance: TLS protects a message between hops but not while it sits in the broker, in a replay log or in
+    a dead-letter queue. Sign messages (HMAC or JWS) so consumers can detect tampering, and encrypt sensitive
+    payloads so broker operators and other consumers cannot read them.
+  layers:
+  - platform.messaging
+  stride:
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Are messages signed or integrity-protected, and sensitive payloads encrypted end to end?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  detect_keywords:
+  - message signing
+  - signed messages
+  - payload encryption
+  notes: 'See also: DATA-TLS-001, MSG-AUTH-001.'
+- id: MSG-REPLAY-001
+  title: Replay, duplicate and ordering protection
+  intent: Messages carry unique IDs and timestamps, consumers are idempotent, and stale or duplicate messages
+    are rejected.
+  guidance: Brokers usually deliver 'at least once', and attackers can resend a captured valid message. Give
+    each message a unique ID and timestamp, keep a record of IDs already processed, reject stale messages and
+    design consumers so processing twice has no extra effect.
+  layers:
+  - platform.messaging
+  stride:
+  - Tampering
+  - Repudiation
+  assessment_signal: Do messages carry unique IDs and timestamps, with idempotent consumers that reject duplicates
+    and stale messages?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - idempotent consumer
+  - deduplication
+  - exactly-once
+  notes: 'See also: BIZ-TXN-001.'
+- id: MSG-SCHEMA-001
+  title: Schema validation and registry governance
+  intent: Every message is validated against a registered schema, and schema changes are controlled.
+  guidance: A consumer that trusts message shape can be broken or exploited by one malformed event. Validate
+    every message against a schema from a registry, and restrict who can publish or change schemas so an attacker
+    cannot redefine what 'valid' means.
+  layers:
+  - platform.messaging
+  stride:
+  - Tampering
+  assessment_signal: Are messages validated against a registered schema, with controlled schema changes?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - schema registry
+  - schema validation
+  - avro
+  - protobuf
+  notes: 'See also: IN-VAL-001.'
+- id: MSG-DLQ-001
+  title: Poison-message handling and dead-letter security
+  intent: Retries are capped, failing messages move to a dead-letter queue, and the DLQ is access-controlled
+    and monitored.
+  guidance: 'One message a consumer cannot handle can be retried forever and block the queue. Cap retries and
+    move failures to a dead-letter queue, then protect that queue: it collects sensitive payloads and is often
+    left with weaker access controls and no owner.'
+  layers:
+  - platform.messaging
+  stride:
+  - DenialOfService
+  - InformationDisclosure
+  assessment_signal: Are retries capped with a dead-letter queue that is access-controlled, monitored and owned?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  detect_keywords:
+  - dead-letter queue
+  - dlq
+  - poison message
+  notes: 'See also: MSG-AUTH-001, LOG-CORR-001.'
+- id: MSG-QUOTA-001
+  title: Broker quotas and backpressure
+  intent: Per-producer quotas, retention limits and consumer backpressure stop one client exhausting the broker.
+  guidance: A misbehaving or compromised producer can flood a topic, fill broker storage and stall every other
+    consumer. Set per-client quotas, retention limits and alerts on consumer lag.
+  layers:
+  - platform.messaging
+  stride:
+  - DenialOfService
+  default_expectation: recommended
+  assessment_signal: Are per-producer quotas, retention limits and consumer-lag alerts configured on the broker?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 13
+    version: '8.1'
+  detect_keywords:
+  - producer quota
+  - backpressure
+  - consumer lag
+  notes: 'See also: SAAS-QUOTA-001, API-RES-001.'
+- id: MSG-MFT-001
+  title: Secure file transfer and batch integrations
+  intent: Batch and file-based integrations use managed transfer with key-based auth, signed and encrypted
+    files, and integrity checks.
+  guidance: Many enterprise and bank integrations still move data as files (settlement, payroll, reconciliation).
+    Use SFTP or a managed file transfer service with key-based authentication, sign and encrypt files (for
+    example PGP), verify checksums and record counts before processing, and clean up landing zones.
+  layers:
+  - platform.messaging
+  stride:
+  - Spoofing
+  - Tampering
+  - InformationDisclosure
+  assessment_signal: Do file-based integrations use managed transfer with key auth, signed/encrypted files
+    and integrity checks?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  pci:
+  - requirement: 4.2.1
+  detect_keywords:
+  - sftp
+  - managed file transfer
+  - pgp
+  - mft
+  notes: 'See also: EXT-TPR-001, MSG-INT-001.'

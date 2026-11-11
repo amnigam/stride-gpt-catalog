@@ -95,3 +95,31 @@ def test_owasp_llm_refs_use_2025(catalog):
         for f in c.threat_frameworks:
             if f.framework == "owasp_llm":
                 assert f.version == "2025", (c.id, f.ref)
+
+
+def test_expanded_catalog_controls_exist(catalog):
+    # The pre-ARB expansion (snapshot review + enterprise gap check).
+    ids = {c.id for c in catalog.controls}
+    expected = {"IAM-MFA-001", "IAM-PAM-001", "IAM-S2S-001", "DATA-MASK-001", "LOG-CORR-001",
+                "EXT-TPR-001", "NET-EGRESS-001", "RES-DR-001", "SDLC-PIPE-001", "DATA-RES-001",
+                "API-FPA-001", "BIZ-TXN-001", "WEB-SCRIPT-001", "MSG-REPLAY-001", "CTR-K8S-001",
+                "CLD-LOG-001", "AI-OUT-ACT-001", "AI-RAG-ING-001", "AI-TRAIN-001", "ASI-KILL-001",
+                "MCP-PIN-001"}
+    assert expected <= ids
+    assert len(catalog) == 123
+
+
+def test_every_layer_has_controls(catalog):
+    used = {l for c in catalog.controls for l in c.layers}
+    assert used == set(Layer)
+
+
+def test_see_also_references_resolve(catalog):
+    # notes of the form "See also: A, B." must point at real control ids
+    import re
+    ids = {c.id for c in catalog.controls}
+    for c in catalog.controls:
+        for ref in re.findall(r"\b[A-Z]+(?:-[A-Z]+)*-\d{3}\b", c.notes or ""):
+            if ref in {"AI-LIN-001", "AI-RAG-LIN-001", "CFG-DRIFT-001"}:
+                continue  # proposals absorbed into existing controls
+            assert ref in ids, (c.id, ref)

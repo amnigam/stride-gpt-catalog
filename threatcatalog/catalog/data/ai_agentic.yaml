@@ -110,3 +110,56 @@
   - mutual auth
   - agent trust
   - signed agent message
+- id: ASI-NHI-001
+  title: Dedicated agent non-human identity
+  intent: Each agent has its own registered identity tied to its tool permissions, never a shared service account.
+  guidance: If several agents share one service account, you cannot tell which one acted and each gets the
+    union of all their permissions. Give every agent its own non-human identity with only the permissions its
+    tools need, and rotate and retire it like any other credential.
+  layers:
+  - ai.agentic
+  stride:
+  - Spoofing
+  - Repudiation
+  assessment_signal: Does each agent have its own registered non-human identity with scoped permissions?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 5
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  - framework: owasp_asi
+    ref: ASI03:2026
+    version: '2026'
+  detect_keywords:
+  - agent identity
+  - non-human identity
+  - nhi
+  notes: 'See also: IAM-S2S-001, AI-OBO-001, ASI-AUTH-001.'
+- id: ASI-KILL-001
+  title: Agent kill switch and circuit breaker
+  intent: Operators can stop an agent instantly, and circuit breakers halt repeated failing or abusive tool
+    calls.
+  guidance: Loop bounds trip automatically, but operators also need a manual stop. Provide a tested kill switch
+    that halts an agent (or all agents) immediately and revokes its tokens, plus circuit breakers that stop
+    an agent making repeated failing or anomalous tool calls.
+  layers:
+  - ai.agentic
+  stride:
+  - DenialOfService
+  - ElevationOfPrivilege
+  assessment_signal: Is there a tested kill switch and circuit breaker that can halt an agent and revoke its
+    access immediately?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 17
+    version: '8.1'
+  - framework: owasp_asi
+    ref: ASI10:2026
+    version: '2026'
+  detect_keywords:
+  - kill switch
+  - emergency stop
+  - agent circuit breaker
+  notes: 'See also: ASI-LOOP-001, IR-RESP-001.'

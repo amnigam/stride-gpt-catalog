@@ -82,3 +82,33 @@
   - obfuscation
   - binary protection
   - integrity check
+- id: MOB-LINK-001
+  title: Deep link, intent and WebView hardening
+  intent: Deep links and intents are validated, verified app links are used, and WebViews do not expose native
+    bridges to untrusted content.
+  guidance: Deep links and exported components let other apps and websites drive your app. Use verified app
+    links, validate every parameter, avoid exporting components unnecessarily, and keep WebViews from loading
+    untrusted content or exposing JavaScript bridges to it.
+  layers:
+  - platform.mobile
+  stride:
+  - Tampering
+  - ElevationOfPrivilege
+  assessment_signal: Are deep links and intents validated, and WebViews restricted from untrusted content and
+    native bridges?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_masvs
+    ref: MASVS-PLATFORM
+    version: 2.x
+  - framework: owasp_mobile
+    ref: M4:2024
+    version: '2024'
+  detect_keywords:
+  - deep link validation
+  - app links
+  - universal links
+  - webview hardening
+  notes: 'See also: MOB-RASP-001.'

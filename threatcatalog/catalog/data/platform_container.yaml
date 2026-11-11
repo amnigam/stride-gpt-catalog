@@ -1,0 +1,84 @@
+# Container layer — container images, runtime and Kubernetes (facet: container).
+# PCI requirement IDs are ILLUSTRATIVE seed mappings; verify against PCI DSS v4.0.1.
+- id: CTR-IMG-001
+  title: Trusted, scanned and signed container images
+  intent: Images come from approved minimal bases, are scanned and signed in CI, and only signed images are
+    admitted to the cluster.
+  guidance: A container image is the whole operating environment for your code. Build from approved minimal
+    base images, scan for vulnerabilities and secrets, sign in the pipeline, and have an admission controller
+    reject anything unsigned or from an unapproved registry.
+  layers:
+  - platform.container
+  stride:
+  - Tampering
+  assessment_signal: Are images built from approved bases, scanned and signed, with admission control enforcing
+    signatures?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 2
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  pci:
+  - requirement: 6.3.2
+  detect_keywords:
+  - image signing
+  - admission controller
+  - image scanning
+  - distroless
+  - cosign
+  notes: 'See also: SDLC-PIPE-001, SCA-SBOM-001.'
+- id: CTR-RUN-001
+  title: Container runtime hardening
+  intent: Containers run as non-root with read-only filesystems, dropped capabilities and no privileged mode.
+  guidance: A container escape turns one compromised service into a compromised node. Run as non-root, use
+    read-only root filesystems, drop Linux capabilities, forbid privileged pods and host mounts, and enforce
+    this with Kubernetes Pod Security Standards (restricted).
+  layers:
+  - platform.container
+  stride:
+  - ElevationOfPrivilege
+  assessment_signal: Do containers run non-root, read-only, with dropped capabilities and Pod Security Standards
+    enforced?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+  pci:
+  - requirement: 2.2.1
+  detect_keywords:
+  - pod security standards
+  - non-root container
+  - read-only root filesystem
+  - seccomp
+  notes: 'See also: ONP-HARD-001.'
+- id: CTR-K8S-001
+  title: Kubernetes cluster access and network policy
+  intent: Cluster RBAC is least-privilege, namespaces separate workloads, and default-deny network policies
+    control pod traffic.
+  guidance: By default every pod can talk to every other pod and a broad service account can read cluster secrets.
+    Scope cluster RBAC tightly, separate workloads by namespace, apply default-deny network policies, keep
+    the API server private and follow the CIS Kubernetes Benchmark.
+  layers:
+  - platform.container
+  stride:
+  - ElevationOfPrivilege
+  - InformationDisclosure
+  assessment_signal: Is cluster RBAC least-privilege with namespace isolation, default-deny network policies
+    and a private API server?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+  - framework: cis_v8
+    ref: Control 12
+    version: '8.1'
+  pci:
+  - requirement: 1.2.1
+  detect_keywords:
+  - network policy
+  - kubernetes rbac
+  - cis kubernetes benchmark
+  - default deny
+  notes: 'See also: CLD-SEG-001, CLD-IAM-001.'
