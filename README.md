@@ -116,6 +116,9 @@ output-token budget than a plain web app — see
 | `pdf_export.py` | PDF rendering (reportlab; optional `[pdf]` extra) | ✅ |
 | `app/streamlit_app.py` | UI: detect-from-diagram, declare, run, download | — |
 | `app/pages/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
+| `app/pages/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
+| `app/pages/3_Help.py` | how to use + DREAD guide with a live worked example | — |
+| `help_example.py` | computes the Help page's worked DREAD example with the real scorer | ✅ |
 
 The model lives behind one protocol (`ArtifactEngine`) with two implementations
 — a real `LLMArtifactEngine` and an offline `DeterministicArtifactEngine`. The

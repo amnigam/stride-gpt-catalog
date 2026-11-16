@@ -14,6 +14,7 @@ isn't part of the project — delete it.
 | `app/streamlit_app.py` | The UI. Engine + model picker, API-key field, diagram upload, detect-and-prefill, declaration, report. |
 | `app/pages/2_SAD_Threat_Model.py` | Upload a solution architecture document (DOCX/PDF/MD) → completeness check → confirm profile → automated threat model. |
 | `app/pages/1_Control_Catalog.py` | Reference page (sidebar nav) — browsable/filterable description of every control, generated from the catalog; exportable to Markdown. |
+| `app/pages/3_Help.py` | Help: which page to use (SAD vs description + diagram) and the DREAD scoring guide with a worked example computed by the real scorer (`threatcatalog/help_example.py`). |
 
 ## The engine (`threatcatalog/`)
 | Path | What it is |
