@@ -121,7 +121,7 @@ if diagram_file is not None:
 # ---- step 3a: detect controls from diagram + description, pre-fill declaration ----
 st.subheader("3 · Detect & declare")
 st.caption("Detect reads the description and — with an LLM engine — the diagram, then "
-           "pre-fills the declaration below. Each AI suggestion comes with its reasoning "
+           "pre-fills the declaration below. Each AI evaluation comes with its reasoning "
            "and the sentence or diagram element it relied on. The AI only reports controls "
            "it finds evidence for; it never marks one absent, so unseen controls stay "
            "'unknown'. The offline engine falls back to keyword matching.")
@@ -191,7 +191,7 @@ with st.expander("Control declaration", expanded=True):
     st.caption("Each control has an editable note, pre-filled with the AI's reasoning. "
                "Change the status or the note to record your own assessment; the AI's "
                "original suggestion is kept and both appear in the report. Tick "
-               "'Reviewed' to confirm an AI suggestion as-is.")
+               "'Reviewed' to confirm an AI evaluation as-is.")
 
     # save / load — declarations survive a page refresh and carry across ARB rounds
     c1, c2 = st.columns([1, 2])
@@ -228,7 +228,7 @@ with st.expander("Control declaration", expanded=True):
 
     visible = [c.id for c in expected if _LAYER_OF[c.id] in shown_layers
                and (not only_attention or needs_note(rows[c.id]))]
-    cols = ["ID", "Control", "Status", "Note", "Reviewed", "AI suggestion", "AI cited",
+    cols = ["ID", "Control", "Status", "Note", "Reviewed", "AI evaluation", "AI cited",
             "Basis", "Question", "Layer"]
     table = pd.DataFrame([{
         "ID": cid,
@@ -236,7 +236,7 @@ with st.expander("Control declaration", expanded=True):
         "Status": rows[cid].status.value,
         "Note": rows[cid].evidence.note or "",
         "Reviewed": rows[cid].evidence.reviewed,
-        "AI suggestion": _ai_label(rows[cid]),
+        "AI evaluation": _ai_label(rows[cid]),
         "AI cited": rows[cid].evidence.ai_quote or "",
         "Basis": BASIS_LABEL.get(evidence_basis(rows[cid].status, rows[cid].evidence), ""),
         "Question": _CTRL[cid].assessment_signal,
@@ -248,7 +248,7 @@ with st.expander("Control declaration", expanded=True):
         table, key=f"decl_editor_{st.session_state['decl_ver']}_{view_key}",
         hide_index=True, use_container_width=True, num_rows="fixed",
         height=min(36 * (len(table) + 1) + 3, 720),
-        disabled=["ID", "Layer", "Control", "Question", "AI suggestion", "AI cited", "Basis"],
+        disabled=["ID", "Layer", "Control", "Question", "AI evaluation", "AI cited", "Basis"],
         column_config={
             "Control": st.column_config.TextColumn(width="medium", pinned=True),
             "ID": st.column_config.TextColumn(pinned=True),
@@ -263,7 +263,7 @@ with st.expander("Control declaration", expanded=True):
                 help="Pre-filled with the AI's reasoning. Edit to add or replace with your "
                      "own assessment."),
             "Reviewed": st.column_config.CheckboxColumn(
-                help="Tick to confirm the AI suggestion after checking it"),
+                help="Tick to confirm the AI evaluation after checking it"),
         })
 
     changed = False

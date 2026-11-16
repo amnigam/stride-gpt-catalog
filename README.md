@@ -193,7 +193,7 @@ uv run streamlit run app/streamlit_app.py
    actually in the description is flagged and its confidence capped. The AI never marks
    a control absent.
 5. Review the declaration table. Change a **Status** or edit the **Note** to record your
-   own assessment, or tick **Reviewed** to confirm an AI suggestion as-is. Your name and
+   own assessment, or tick **Reviewed** to confirm an AI evaluation as-is. Your name and
    a UTC timestamp are recorded; the AI's original suggestion is never overwritten.
    Rows where a reviewer note is expected (an override, or partial / not present with no
    note) are flagged, but nothing blocks the run. Re-running Detect leaves rows you
@@ -201,8 +201,11 @@ uv run streamlit run app/streamlit_app.py
    across sessions or ARB rounds.
 6. **Run**. The gap register gains a **Basis** column (AI not reviewed / AI, reviewer
    confirmed / Reviewer override / Reviewer), the executive summary counts statuses that
-   rest on unreviewed AI suggestions, and an **evidence appendix** shows, per control, the
-   AI suggestion, cited evidence, AI rationale, reviewer note and who reviewed it when.
+   rest on unreviewed AI evaluations, and an **evidence appendix** shows one card per
+   control (grouped by status, gaps first) with the AI evaluation, cited evidence, AI
+   rationale, reviewer note and who reviewed it when. The appendix opens with a note that
+   the evaluations are automated and may need further AppSec analysis. SAD runs show the
+   same cards without the review fields (nobody reviews an automated run).
    Notes on partial / not-present controls are also passed to the threat and DREAD
    prompts so findings name what is actually missing. Download as **Markdown** or **PDF**.
 

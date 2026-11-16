@@ -21,7 +21,7 @@ _STATUS_LABEL = {
 }
 
 
-_SOURCE_LABEL = {"description": "description", "diagram": "diagram",
+_SOURCE_LABEL = {"description": "description", "diagram": "diagram", "sad": "SAD",
                  "keyword": "description keyword match", "diagram_vision": "diagram"}
 
 
@@ -33,10 +33,33 @@ def basis_label(gi: GapItem) -> str:
     return BASIS_LABEL.get(gi.basis, "\u2014") if gi.basis else "\u2014"
 
 
+# Order of the evidence appendix: findings first, so AppSec reads gaps before passes.
+EVIDENCE_ORDER = [ControlStatus.NOT_PRESENT, ControlStatus.PARTIAL, ControlStatus.UNKNOWN,
+                  ControlStatus.IMPLEMENTED, ControlStatus.NOT_APPLICABLE]
+
+EVIDENCE_TITLE = "Appendix \u2014 control evidence"
+EVIDENCE_NOTE_SAD = ("Automated assessment. Every evaluation below was produced by an automated "
+                     "run against the SAD; no person has reviewed it. Treat it as a starting "
+                     "point that may need further analysis by AppSec before it is relied on.")
+EVIDENCE_NOTE_REVIEW = ("Automated assessment. The AI evaluations below were produced "
+                        "automatically and may need further analysis by AppSec. Each AI "
+                        "evaluation is kept as first written; where a reviewer changed a "
+                        "status or note, their change is shown next to it.")
+
+
+def evidence_note(r: ThreatModelReport) -> str:
+    return EVIDENCE_NOTE_SAD if r.sad is not None else EVIDENCE_NOTE_REVIEW
+
+
 def evidence_records(r: ThreatModelReport) -> list[dict]:
     """One record per control that has something to show in the evidence
-    appendix — shared by the Markdown and PDF renderers. Every string is
-    whitespace-flattened; renderers do their own escaping."""
+    appendix \u2014 shared by the Markdown and PDF renderers. Every string is
+    whitespace-flattened; renderers do their own escaping.
+
+    In an automated (SAD) run nobody can review a row, so the review-only fields
+    (`final_status`, `basis`, `reviewer_note`, `reviewed_by`) are left out: the AI
+    evaluation *is* the status."""
+    automated = r.sad is not None
     recs = []
     for gi in r.gap_items:
         ev = gi.evidence
@@ -54,17 +77,47 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
         if ev.reviewed_at:
             when = ev.reviewed_at.replace("T", " ").replace("+00:00", " UTC")
         recs.append({
+            "id": gi.control.id,
+            "title": gi.control.title,
             "control": f"{gi.control.id} {gi.control.title}",
+            "status_enum": gi.status,
             "status": _STATUS_LABEL[gi.status],
-            "basis": basis_label(gi),
-            "ai_suggestion": ai,
+            "basis": None if automated else basis_label(gi),
+            "ai_evaluation": ai,
             "quote": _flat(ev.ai_quote) or None,
             "quote_unverified": ev.quote_verified is False,
             "ai_note": _flat(ev.ai_note) if ev.ai_status is not None else None,
-            "reviewer_note": _flat(ev.reviewer_note) or None,
-            "reviewed_by": " \u00b7 ".join(x for x in (ev.reviewer, when) if x) or None,
+            "reviewer_note": None if automated else (_flat(ev.reviewer_note) or None),
+            "reviewed_by": None if automated else (
+                " \u00b7 ".join(x for x in (ev.reviewer, when) if x) or None),
         })
     return recs
+
+
+def evidence_groups(r: ThreatModelReport) -> list[tuple[ControlStatus, list[dict]]]:
+    """Evidence records grouped by final status, findings first; empty groups dropped."""
+    recs = evidence_records(r)
+    return [(st, g) for st in EVIDENCE_ORDER
+            if (g := [x for x in recs if x["status_enum"] == st])]
+
+
+def evidence_fields(rec: dict) -> list[tuple[str, str, str]]:
+    """The labelled rows of one control card, in display order, as
+    (key, label, raw value). Renderers escape and style the values."""
+    out = []
+    if rec["basis"] is not None:
+        out.append(("final", "Final status", f"{rec['status']} \u00b7 {rec['basis']}"))
+    if rec["ai_evaluation"]:
+        out.append(("ai", "AI evaluation", rec["ai_evaluation"]))
+    if rec["quote"]:
+        out.append(("quote", "Cited evidence", rec["quote"]))
+    if rec["ai_note"]:
+        out.append(("ai_note", "AI rationale", rec["ai_note"]))
+    if rec["reviewer_note"]:
+        out.append(("reviewer_note", "Reviewer note", rec["reviewer_note"]))
+    if rec["reviewed_by"]:
+        out.append(("reviewed_by", "Reviewed by", rec["reviewed_by"]))
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -204,11 +257,11 @@ def summary_facts(r: ThreatModelReport) -> dict:
     n_ai_only = sum(1 for g in gi if g.basis == EvidenceBasis.AI_UNREVIEWED
                     and g.status != ControlStatus.UNKNOWN)
     n_override = sum(1 for g in gi if g.basis == EvidenceBasis.REVIEWER_OVERRIDE)
-    if n_ai_only:
-        notes.append(f"{n_ai_only} control status(es) rest on AI suggestions that no "
+    if n_ai_only and r.sad is None:      # SAD runs say so once, in the banner
+        notes.append(f"{n_ai_only} control status(es) rest on AI evaluations that no "
                      f"reviewer has confirmed")
     if n_override:
-        notes.append(f"{n_override} AI suggestion(s) were overridden by a reviewer "
+        notes.append(f"{n_override} AI evaluation(s) were overridden by a reviewer "
                      f"(see the evidence appendix)")
     if n_unknown:
         notes.append(f"{n_unknown} unknown control(s) need confirmation \u2014 treated as "
@@ -322,7 +375,7 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"*Resolved controls:* {r.resolved_control_count}  ")
     out.append(f"*PCI in scope:* {'yes' if p.handles_cardholder_data else 'no'}\n")
     if r.sad is not None:
-        out.append(f"> **Automated draft from SAD \u2014 not reviewed.** {SAD_RULES_TEXT}\n")
+        out.append(f"> **Automated draft from SAD.** {SAD_RULES_TEXT}\n")
 
     # Executive summary — deterministic roll-up, first thing a reader sees
     out.extend(_executive_summary(r))
@@ -332,13 +385,17 @@ def render_markdown(r: ThreatModelReport) -> str:
 
     # Gap register
     out.append("## Control gap register\n")
-    out.append("| Control | Status | Basis | Frameworks | PCI exposed |")
-    out.append("|---|---|---|---|---|")
+    # Basis says who stands behind a status; in an automated SAD run it is the AI
+    # for every row, so the column is dropped there.
+    show_basis = r.sad is None
+    out.append("| Control | Status |" + (" Basis |" if show_basis else "") + " Frameworks | PCI exposed |")
+    out.append("|---|---|" + ("---|" if show_basis else "") + "---|---|")
     for gi in r.gap_items:
         fws = ", ".join(f.ref for f in gi.control.threat_frameworks) or "—"
         pci = ", ".join(x.requirement for x in gi.pci_exposed) or "—"
-        out.append(f"| {gi.control.id} {gi.control.title} | {_STATUS_LABEL[gi.status]} "
-                   f"| {basis_label(gi)} | {fws} | {pci} |")
+        basis = f" {basis_label(gi)} |" if show_basis else ""
+        out.append(f"| {gi.control.id} {gi.control.title} | {_STATUS_LABEL[gi.status]} |"
+                   f"{basis} {fws} | {pci} |")
     out.append("")
 
     # Threats
@@ -422,28 +479,46 @@ def render_markdown(r: ThreatModelReport) -> str:
                 out.append(f"- {c.title} — [{strides}]")
         out.append("")
 
-    # Evidence appendix — AI rationale and reviewer notes, per control
-    recs = evidence_records(r)
-    if recs:
-        out.append("## Appendix — control evidence & reviewer notes\n")
-        out.append("_What each control's status rests on. AI suggestions are kept as "
-                   "first written; a reviewer's changes are shown alongside them._\n")
-        for rec in recs:
-            out.append(f"- **{_md(rec['control'])}** — {rec['status']} · _{rec['basis']}_")
-            if rec["ai_suggestion"]:
-                out.append(f"  - AI suggested: {rec['ai_suggestion']}")
-            if rec["quote"]:
-                flag = " ⚠ _not found verbatim in the description_" if rec["quote_unverified"] else ""
-                out.append(f"  - Cited evidence: \u201c{_md(rec['quote'])}\u201d{flag}")
-            if rec["ai_note"]:
-                out.append(f"  - AI rationale: {_md(rec['ai_note'])}")
-            if rec["reviewer_note"]:
-                out.append(f"  - Reviewer note: {_md(rec['reviewer_note'])}")
-            if rec["reviewed_by"]:
-                out.append(f"  - Reviewed by: {_md(rec['reviewed_by'])}")
-        out.append("")
+    # Evidence appendix — one card per control, grouped by status, findings first
+    out.extend(_evidence_md(r))
 
     return "\n".join(out)
+
+
+_STATUS_MARK = {ControlStatus.NOT_PRESENT: "\U0001F534", ControlStatus.PARTIAL: "\U0001F7E0",
+                ControlStatus.UNKNOWN: "\u26AA", ControlStatus.IMPLEMENTED: "\U0001F7E2",
+                ControlStatus.NOT_APPLICABLE: "\u26AA"}
+
+
+def _evidence_md(r: ThreatModelReport) -> list[str]:
+    groups = evidence_groups(r)
+    if not groups:
+        return []
+    lead, _, rest = evidence_note(r).partition(". ")
+    out = [f"## {EVIDENCE_TITLE}\n", f"> \u26A0\uFE0F **{lead}.** {rest}\n"]
+    for st, recs in groups:
+        out.append(f"### {_STATUS_MARK[st]} {_STATUS_LABEL[st]} ({len(recs)})\n")
+        for rec in recs:
+            out.append(f"| **{_ecell(rec['id'])}** | **{_ecell(rec['title'])}** |")
+            out.append("|---|---|")
+            for key, label, val in evidence_fields(rec):
+                if key == "quote":
+                    v = f"\u201c{_ecell(val)}\u201d"
+                    if rec["quote_unverified"]:
+                        v += " \u26A0 _not found verbatim in the source_"
+                elif key == "ai":
+                    v = f"**{_ecell(val)}**"
+                else:
+                    v = _ecell(val)
+                out.append(f"| {label} | {v} |")
+            out.append("")
+    return out
+
+
+def _ecell(s: str) -> str:
+    """Free text inside an evidence card cell: pipes are escaped, not replaced,
+    so quotes and reviewer notes read exactly as written."""
+    return _md(" ".join(str(s).split())).replace("|", "\\|")
 
 
 def _cell(s: str) -> str:
