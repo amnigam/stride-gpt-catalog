@@ -3,3 +3,5 @@ PyYAML>=6.0
 # optional:
 #   anthropic>=0.39     # for the LLM engine (pip install -e .[llm])
 #   streamlit>=1.45     # for the UI    (pip install -e .[app])
+#   boto3>=1.35         # for the AWS Bedrock engine (pip install -e .[bedrock])
+#   python-docx, pymupdf, Pillow   # for the SAD page (pip install -e .[sad])

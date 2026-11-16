@@ -30,7 +30,7 @@ from reportlab.platypus import (HRFlowable, Paragraph, SimpleDocTemplate, Spacer
                                 Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import _STATUS_LABEL, basis_label, evidence_records, summary_facts
+from .report import _STATUS_LABEL, basis_label, evidence_records, sad_facts, summary_facts
 
 # ---- palette ----
 _NAVY = colors.HexColor("#1f2c4c")
@@ -160,6 +160,10 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         f"Expected controls: {r.resolved_control_count} &nbsp;|&nbsp; "
         f"PCI in scope: {'yes' if p.handles_cardholder_data else 'no'}", ss["Meta"]))
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
+    sf = sad_facts(r)
+    if sf is not None:
+        el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>Automated draft from SAD &mdash; '
+                            f'not reviewed.</b></font> {escape(sf["rules"])}', ss["Body"]))
 
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
@@ -200,6 +204,23 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         el.append(Paragraph(
             f'<font color="{_GREEN.hexval()}"><b>No gaps and nothing outstanding</b></font> '
             "— all expected controls are confirmed in place.", ss["Body"]))
+
+    # ---- SAD assessment basis ----
+    if sf is not None:
+        el.append(Paragraph("Assessment basis (SAD)", ss["H2"]))
+        el.append(_table([["Item", "Value"]] + [list(x) for x in sf["source"]],
+                         [4.0 * cm, 12.5 * cm], ss))
+        el.append(Paragraph("Application profile", ss["Lead"]))
+        el.append(_table([["Facet", "Selected", "Basis", "Reason"]] + [list(x) for x in sf["facets"]],
+                         [3.2 * cm, 1.7 * cm, 3.0 * cm, 8.6 * cm], ss))
+        el.append(Paragraph("SAD completeness", ss["Lead"]))
+        el.append(_table([["Item", "Result", "Evidence or what is missing"]]
+                         + [list(x) for x in sf["completeness"]],
+                         [5.2 * cm, 1.9 * cm, 9.4 * cm], ss))
+        if sf["limitations"]:
+            el.append(Paragraph("Limitations of this assessment", ss["Lead"]))
+            for x in sf["limitations"]:
+                el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
 
     # ---- gap register (colour-coded status) ----
     el.append(Paragraph("Control gap register", ss["H2"]))

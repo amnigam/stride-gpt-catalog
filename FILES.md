@@ -12,6 +12,7 @@ isn't part of the project — delete it.
 | `requirements.txt` | Core runtime deps (pydantic, PyYAML). Optional extras are commented. |
 | `.gitignore` | Keeps caches/venvs/build junk out of the repo (so the root stays clean). |
 | `app/streamlit_app.py` | The UI. Engine + model picker, API-key field, diagram upload, detect-and-prefill, declaration, report. |
+| `app/pages/2_SAD_Threat_Model.py` | Upload a solution architecture document (DOCX/PDF/MD) → completeness check → confirm profile → automated threat model. |
 | `app/pages/1_Control_Catalog.py` | Reference page (sidebar nav) — browsable/filterable description of every control, generated from the catalog; exportable to Markdown. |
 
 ## The engine (`threatcatalog/`)
@@ -26,7 +27,10 @@ isn't part of the project — delete it.
 | `pci.py` | PCI DSS v4.0.1 compliance view (second read off the same gap). |
 | `out_of_catalog.py` | Judges controls the app has but the catalog lacks; flags candidates. |
 | `generators.py` | `ArtifactEngine` protocol + the offline `DeterministicArtifactEngine`. |
-| `llm/provider.py` | Model providers: `OpenAIRawLLM` (default gpt-5.2), `AnthropicRawLLM`, `StubRawLLM`. |
+| `llm/provider.py` | Model providers: `OpenAIRawLLM` (default gpt-5.2), `AnthropicRawLLM` (streamed), `BedrockRawLLM` (AWS Bedrock Converse), `StubRawLLM`. |
+| `llm/factory.py` | Engine choice in the UI → `ArtifactEngine`, shared by both pages. |
+| `sad_extract.py` | Reads a SAD (DOCX/PDF/MD) into text + diagram images, in memory. |
+| `sad.py` | SAD flow: completeness rubric, profile inference, stop rule, SAD status rules (silent = not present, implied = partial), run, feedback document. |
 | `llm/prompts.py` | Prompt builders (serialize the gap; vision prompt; injection hygiene baked in). |
 | `llm/engine.py` | `LLMArtifactEngine` — model path, with the normalization layer that tolerates real-model JSON drift. |
 | `pipeline.py` | Orchestration: profile + evidence → `ThreatModelReport`. |
@@ -43,4 +47,4 @@ isn't part of the project — delete it.
 | `examples/peopledesk_report.md` | A sample generated report (offline engine). |
 
 ## Tests (`tests/`)
-One file per engine area; 112 tests, all offline. Run with `pytest -q`.
+One file per engine area; 170 tests, all offline. Run with `pytest -q`.

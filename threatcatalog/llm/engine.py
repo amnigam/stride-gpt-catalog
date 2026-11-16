@@ -203,6 +203,66 @@ class LLMArtifactEngine:
                     quote_verified=verified, note=rationale)))
         return entries
 
+    # ---- SAD (solution architecture document) ----
+    def _call_with_images(self, system: str, user: str,
+                          images: list[tuple[bytes, str]] | None) -> dict | list:
+        """One call carrying the text and every diagram image."""
+        import base64
+        images = images or []
+        if images and hasattr(self.raw, "complete_json_images"):
+            enc = [(base64.b64encode(b).decode(), mt) for b, mt in images]
+            return self.raw.complete_json_images(system, user, enc)
+        if images and hasattr(self.raw, "complete_json_image"):
+            b, mt = images[0]
+            return self.raw.complete_json_image(system, user, base64.b64encode(b).decode(), mt)
+        return self.raw.complete_json(system, user)
+
+    def assess_sad(self, text: str, rubric: list[dict], images=None,
+                   image_labels: list[str] | None = None) -> dict:
+        """Completeness rubric + profile in one call. Returns the raw object;
+        `threatcatalog.sad.parse_assessment` normalises it."""
+        from ..models import AICapability, PlatformFacet
+        system, user = prompts.sad_assess_prompt(
+            text, rubric, [p.value for p in PlatformFacet],
+            [a.value for a in AICapability if a != AICapability.NONE],
+            len(images or []), image_labels)
+        data = self._call_with_images(system, user, images)
+        if isinstance(data, list):
+            data = data[0] if data and isinstance(data[0], dict) else {}
+        return data if isinstance(data, dict) else {}
+
+    def detect_sad_controls(self, expected, text: str, images=None,
+                            image_labels: list[str] | None = None) -> tuple[list[dict], list[dict]]:
+        """Return (control records, other controls) as plain dicts, shape-coerced.
+        `threatcatalog.sad.build_sad_ledger` applies the SAD status rules."""
+        system, user = prompts.sad_detect_prompt(expected, text, len(images or []), image_labels)
+        data = self._call_with_images(system, user, images)
+        if isinstance(data, dict):
+            ctrl_raw = data.get("controls")
+            other_raw = data.get("other_controls") or []
+            if not isinstance(ctrl_raw, list):
+                ctrl_raw = _listify(data, "controls", "items")
+        else:
+            ctrl_raw, other_raw = _listify(data, "controls", "items"), []
+        controls = []
+        for d in ctrl_raw:
+            if not isinstance(d, dict):
+                continue
+            controls.append({
+                "control_id": _as_opt_str(d.get("control_id")),
+                "status": (_as_str(d.get("status"), "implemented") or "implemented").lower(),
+                "basis": (_as_str(d.get("basis"), "stated") or "stated").lower(),
+                "source": (_as_str(d.get("source"), "text") or "text").lower(),
+                "quote": _as_opt_str(d.get("quote")) or _as_opt_str(d.get("evidence")),
+                "rationale": _as_opt_str(d.get("rationale")) or _as_opt_str(d.get("evidence")),
+            })
+        others = []
+        for d in other_raw if isinstance(other_raw, list) else []:
+            if isinstance(d, dict) and _as_opt_str(d.get("name")):
+                others.append({"name": _as_str(d.get("name")),
+                               "description": _as_str(d.get("description"))})
+        return controls, others
+
     # ---- threats ----
     def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]:
         system, user = prompts.threats_prompt(gap, profile)
