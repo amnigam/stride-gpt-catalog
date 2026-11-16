@@ -34,6 +34,8 @@ from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
                                        evidence_basis, export_json, import_json,
                                        needs_note, to_ledger)
 from threatcatalog.intake import detect_from_text
+from threatcatalog.llm.factory import BEDROCK, OFFLINE, default_model
+from threatcatalog.llm.factory import build_engine as _factory_build
 from threatcatalog.models import (AICapability, AppProfile, ControlStatus,
                                   DataClassification, LedgerEntry,
                                   ObservedControl, PlatformFacet)
@@ -45,47 +47,39 @@ st.title("Catalog-driven, gap-based threat modeling")
 catalog = Catalog.load()
 st.caption(f"Catalog loaded: {len(catalog)} controls across all layers.")
 
-DEFAULT_MODEL = {"OpenAI (ChatGPT)": "gpt-5.2", "Anthropic (Claude)": "claude-sonnet-4-6"}
-
-
 def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = "",
                  max_tokens: int = 32000):
-    """Return an ArtifactEngine for the chosen provider, or None for offline.
-
-    api_key (from the UI) overrides the environment variable when provided;
-    leaving it blank falls back to OPENAI_API_KEY / ANTHROPIC_API_KEY.
-    """
-    if choice == "OpenAI (ChatGPT)":
-        from threatcatalog.llm import LLMArtifactEngine, OpenAIRawLLM
-        return LLMArtifactEngine(OpenAIRawLLM(model=model_id, api_key=api_key or None,
-                                              base_url=base_url or None,
-                                              max_tokens=max_tokens))
-    if choice == "Anthropic (Claude)":
-        from threatcatalog.llm import AnthropicRawLLM, LLMArtifactEngine
-        return LLMArtifactEngine(AnthropicRawLLM(model=model_id, api_key=api_key or None,
-                                                max_tokens=max_tokens))
-    return None  # Deterministic (offline) — pipeline default
+    """Return an ArtifactEngine for the chosen provider, or None for offline."""
+    return _factory_build(choice, model_id, api_key=api_key, base_url=base_url,
+                          max_tokens=max_tokens, region=aws_region, aws_profile=aws_profile)
 
 
 with st.sidebar:
     st.header("0 · Model engine")
     engine_choice = st.selectbox(
         "Generation engine",
-        ["OpenAI (ChatGPT)", "Anthropic (Claude)", "Deterministic (offline)"],
-        help="Deterministic needs no API key. OpenAI/Anthropic build the "
-             "narrative with the model you name below, and read the diagram.")
-    model_id, api_key, base_url = "", "", ""
+        ["OpenAI (ChatGPT)", "Anthropic (Claude)", BEDROCK, OFFLINE],
+        help="Deterministic needs no API key. The others build the narrative with "
+             "the model you name below, and read the diagram.")
+    model_id, api_key, base_url, aws_region, aws_profile = "", "", "", "", ""
     max_out_tokens = 32000
-    if engine_choice != "Deterministic (offline)":
-        model_id = st.text_input("Model id", DEFAULT_MODEL[engine_choice],
-                                 help="e.g. gpt-5.2, gpt-4o, claude-sonnet-4-6 — "
-                                      "whatever your org provides.")
+    if engine_choice != OFFLINE:
+        model_id = st.text_input("Model id", default_model(engine_choice),
+                                 help="e.g. gpt-5.2, claude-sonnet-4-6, or a Bedrock model / "
+                                      "inference-profile id — whatever your org provides.")
+    if engine_choice == BEDROCK:
+        aws_region = st.text_input("AWS region (optional)",
+                                   help="Blank = AWS_REGION from the environment.")
+        aws_profile = st.text_input("AWS profile (optional)",
+                                    help="Blank = default AWS credential chain.")
+    elif engine_choice != OFFLINE:
         key_env = "OPENAI_API_KEY" if engine_choice.startswith("OpenAI") else "ANTHROPIC_API_KEY"
         api_key = st.text_input("API key (optional — overrides env var)", type="password",
                                 help=f"Leave blank to use {key_env} from the environment.")
         if engine_choice.startswith("OpenAI"):
             base_url = st.text_input("API base URL (optional)",
                                      help="For an org gateway / Azure endpoint. Blank = default OpenAI.")
+    if engine_choice != OFFLINE:
         max_out_tokens = st.number_input(
             "Max output tokens", min_value=4096, max_value=128000, value=32000, step=4096,
             help="On reasoning models (GPT-5 / o-series) this budget covers reasoning "

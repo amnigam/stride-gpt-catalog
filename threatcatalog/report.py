@@ -247,6 +247,71 @@ def _executive_summary(r: ThreatModelReport) -> list[str]:
     return lines
 
 
+SAD_RULES_TEXT = ("Automated draft generated from the solution architecture document (SAD); "
+                  "no control status has been reviewed by a person. Controls the SAD does not "
+                  "mention are reported as Not present: whatever the SAD omits is taken as "
+                  "accepted by the business. Controls only implied by the SAD are reported as "
+                  "Partial and must be confirmed.")
+
+_FACET_SOURCE = {"llm": "AI", "keyword": "Keyword", "llm+keyword": "AI + keyword",
+                 "default": "Default", "reviewer": "Reviewer"}
+
+
+def sad_facts(r: ThreatModelReport) -> dict | None:
+    """The SAD assessment basis, shaped for both renderers. None for non-SAD runs."""
+    sc = r.sad
+    if sc is None:
+        return None
+    src = [("File", sc.source_file)]
+    if sc.document_title:
+        src.append(("Document", sc.document_title + (f" (version {sc.document_version})"
+                                                     if sc.document_version else "")))
+    size = f"{sc.words:,} words" + (f", {sc.pages} pages" if sc.pages else "")
+    src += [("Size", size), ("SHA-256", sc.sha256[:16] + "…"),
+            ("Diagrams read", f"{len(sc.diagrams_read)}" + (f" ({'; '.join(sc.diagrams_read)})"
+                                                         if sc.diagrams_read else "")),
+            ("Engine", sc.engine or "—"),
+            ("Profile confirmed by", sc.profile_confirmed_by or "not recorded"),
+            ("Generated", sc.generated_at or "—")]
+    facets = []
+    for f in sc.facets:
+        basis = _FACET_SOURCE.get(f.source, f.source) + (" (assumed)" if f.assumed else "")
+        facets.append((f.facet, "yes" if f.selected else "no", basis, f.reason or "—"))
+    completeness = [(c.title, c.score.value.capitalize(),
+                     (c.comment or "—") if c.score.value != "present" else (c.evidence or "—"))
+                    for c in sc.completeness]
+    limitations = [f"{c.title}: {c.score.value}" + (f" — {c.comment}" if c.comment else "")
+                   for c in sc.completeness if c.score.value != "present"]
+    limitations += list(sc.notes)
+    limitations += [f"Figure not read: {s}" for s in sc.diagrams_skipped]
+    return {"rules": SAD_RULES_TEXT, "source": src, "facets": facets,
+            "completeness": completeness, "limitations": limitations}
+
+
+def _sad_section_md(r: ThreatModelReport) -> list[str]:
+    f = sad_facts(r)
+    if f is None:
+        return []
+    out = ["## Assessment basis (SAD)\n", f"> **{f['rules']}**\n"]
+    out += [f"*{k}:* {_md(v)}  " for k, v in f["source"]]
+    out.append("")
+    out.append("### Application profile\n")
+    out.append("| Facet | Selected | Basis | Reason |")
+    out.append("|---|---|---|---|")
+    out += [f"| {a} | {b} | {c} | {_cell(d)} |" for a, b, c, d in f["facets"]]
+    out.append("")
+    out.append("### SAD completeness\n")
+    out.append("| Item | Result | Evidence or what is missing |")
+    out.append("|---|---|---|")
+    out += [f"| {a} | {b} | {_cell(c)} |" for a, b, c in f["completeness"]]
+    out.append("")
+    if f["limitations"]:
+        out.append("### Limitations of this assessment\n")
+        out += [f"- {_md(x)}" for x in f["limitations"]]
+        out.append("")
+    return out
+
+
 def render_markdown(r: ThreatModelReport) -> str:
     p = r.profile
     out: list[str] = []
@@ -256,9 +321,14 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"*Data classification:* {p.data_classification.value}  ")
     out.append(f"*Resolved controls:* {r.resolved_control_count}  ")
     out.append(f"*PCI in scope:* {'yes' if p.handles_cardholder_data else 'no'}\n")
+    if r.sad is not None:
+        out.append(f"> **Automated draft from SAD \u2014 not reviewed.** {SAD_RULES_TEXT}\n")
 
     # Executive summary — deterministic roll-up, first thing a reader sees
     out.extend(_executive_summary(r))
+
+    # SAD assessment basis (SAD-driven runs only)
+    out.extend(_sad_section_md(r))
 
     # Gap register
     out.append("## Control gap register\n")
@@ -374,6 +444,11 @@ def render_markdown(r: ThreatModelReport) -> str:
         out.append("")
 
     return "\n".join(out)
+
+
+def _cell(s: str) -> str:
+    """Free text safe inside a Markdown table cell."""
+    return _md(" ".join(str(s).split())).replace("|", "/")
 
 
 def _md(s: str) -> str:

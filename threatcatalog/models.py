@@ -380,6 +380,57 @@ class PciComplianceView(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# SAD (solution architecture document) assessment context
+# --------------------------------------------------------------------------- #
+class RubricScore(str, Enum):
+    PRESENT = "present"
+    THIN = "thin"
+    MISSING = "missing"
+
+
+class CompletenessItem(BaseModel):
+    """One line of the SAD completeness rubric, as scored for this document."""
+
+    id: str
+    title: str
+    score: RubricScore
+    hard_minimum: bool = False
+    evidence: Optional[str] = None           # quote / section / diagram the score relied on
+    comment: Optional[str] = None            # what is missing or thin
+
+
+class FacetReason(BaseModel):
+    """Why a profile facet was (or was not) selected from the SAD."""
+
+    facet: str                               # e.g. "platform:web", "ai:mcp", "data:Confidential", "pci"
+    selected: bool
+    reason: str = ""
+    quote: Optional[str] = None
+    assumed: bool = False                    # not stated outright: inferred, keyword-only or a default
+    source: str = "llm"                      # llm | keyword | llm+keyword | default | reviewer
+
+
+class SadContext(BaseModel):
+    """What a SAD-driven report rests on: the document, the completeness result,
+    the inferred profile and the rules applied. Rendered at the top of the report."""
+
+    source_file: str
+    sha256: str
+    pages: Optional[int] = None
+    words: int = 0
+    diagrams_read: list[str] = Field(default_factory=list)
+    diagrams_skipped: list[str] = Field(default_factory=list)
+    engine: str = ""
+    document_title: Optional[str] = None
+    document_version: Optional[str] = None
+    completeness: list[CompletenessItem] = Field(default_factory=list)
+    facets: list[FacetReason] = Field(default_factory=list)
+    profile_confirmed_by: Optional[str] = None
+    notes: list[str] = Field(default_factory=list)
+    generated_at: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
 # Final assembled report
 # --------------------------------------------------------------------------- #
 class ThreatModelReport(BaseModel):
@@ -394,3 +445,4 @@ class ThreatModelReport(BaseModel):
     pci_view: PciComplianceView = Field(default_factory=lambda: PciComplianceView(in_scope=False))
     candidates: list[CatalogCandidate] = Field(default_factory=list)
     compensating: list[OutOfCatalogAssessment] = Field(default_factory=list)
+    sad: Optional[SadContext] = None          # set when the report was generated from a SAD

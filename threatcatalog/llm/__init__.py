@@ -1,3 +1,4 @@
-from .provider import AnthropicRawLLM, OpenAIRawLLM, RawLLM, StubRawLLM
+from .provider import AnthropicRawLLM, BedrockRawLLM, OpenAIRawLLM, RawLLM, StubRawLLM
 from .engine import LLMArtifactEngine
-__all__ = ["AnthropicRawLLM", "OpenAIRawLLM", "RawLLM", "StubRawLLM", "LLMArtifactEngine"]
+__all__ = ["AnthropicRawLLM", "BedrockRawLLM", "OpenAIRawLLM", "RawLLM", "StubRawLLM",
+           "LLMArtifactEngine"]

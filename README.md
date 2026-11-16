@@ -158,7 +158,13 @@ then the project root). `.env` is git-ignored, and a variable already set in you
 shell always wins over the file.
 
 Extras: `openai` (ChatGPT engine, the default), `llm` (Anthropic engine),
+`bedrock` (AWS Bedrock engine via boto3), `sad` (DOCX/PDF reading for the SAD page),
 `app` (Streamlit UI), `pdf` (PDF export via reportlab), `dev` (pytest).
+
+**AWS Bedrock.** Pick *AWS Bedrock* as the engine and enter a model or inference-profile
+id from your account (or set `BEDROCK_MODEL_ID`). Credentials and region come from the
+normal AWS chain (`AWS_PROFILE`, `AWS_REGION`, SSO, an instance role); the sidebar can
+override region and profile.
 Requires Python 3.10+.
 
 ---
@@ -200,6 +206,36 @@ uv run streamlit run app/streamlit_app.py
 The left-nav **Control Catalog** page is a browsable, filterable reference of
 every control with a plain-language description — useful to share with the app
 team or PM you're modelling with.
+
+### SAD threat model page (upload a solution architecture document)
+
+The left-nav **SAD Threat Model** page produces a threat model straight from a
+Solution Architecture Document:
+
+1. **Upload** a DOCX, PDF or Markdown SAD (optionally with extra PNG/JPG diagrams).
+   Text keeps its headings and tables; diagrams are taken from the document. PDF pages
+   with vector drawings are rendered to images, and Visio/EMF figures that a model
+   cannot read are listed so you can export them as PNG. The page shows what will be
+   sent and asks you to confirm the document may go to the selected provider.
+2. **Check** — one call scores the SAD against a fixed 12-item completeness rubric and
+   proposes the application profile, each facet with its reason and a quote. A keyword
+   pass cross-checks the model; anything only one of them found is included and marked
+   *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
+   components), the page stops** and offers a feedback checklist for the SAD author
+   instead of a report.
+3. **Confirm** the profile on one screen (your changes are recorded in the report).
+4. **Run.** Controls are detected across the text and every diagram, and the SAD rules
+   apply: a control the SAD **does not mention is Not present** (the report is deliberately
+   harsh: what the SAD omits is taken as accepted by the business); a control only
+   **implied** by features or the tech stack is **Partial** with a note that it must be
+   confirmed; a cited quote that is not really in the SAD drops the control to Partial.
+   The report opens with an *Assessment basis* section (file hash, engine, profile
+   reasons, completeness, limitations). Download it as **Markdown** or **PDF**, plus the
+   **declaration JSON**, which the main page can load for a human review pass.
+
+The output budget on this page defaults to 64,000 tokens because a large SAD on a
+reasoning model spends many tokens thinking. On Bedrock, if a model's own limit is lower,
+the call is retried at that limit automatically.
 
 ### CLI (offline, deterministic)
 
