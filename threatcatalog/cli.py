@@ -40,6 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=None, help="model id (defaults per provider)")
     args = ap.parse_args(argv)
 
+    from .env import load_dotenv
+    load_dotenv()  # API keys may live in a git-ignored .env
+
     data = json.loads(open(args.intake).read())
     profile = AppProfile.model_validate(data["profile"])
     declared = [LedgerEntry.model_validate(d) for d in data.get("declared", [])]

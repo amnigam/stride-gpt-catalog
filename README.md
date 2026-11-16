@@ -143,6 +143,19 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[openai,app,pdf,dev]"
 ```
 
+### API keys in `.env`
+
+Copy `.env.example` to `.env` and put your key there:
+
+```bash
+cp .env.example .env          # Windows: copy .env.example .env
+# then edit .env:  OPENAI_API_KEY=sk-...
+```
+
+The Streamlit app and the CLI load `.env` automatically (from the current folder,
+then the project root). `.env` is git-ignored, and a variable already set in your
+shell always wins over the file.
+
 Extras: `openai` (ChatGPT engine, the default), `llm` (Anthropic engine),
 `app` (Streamlit UI), `pdf` (PDF export via reportlab), `dev` (pytest).
 Requires Python 3.10+.
@@ -158,7 +171,7 @@ uv run streamlit run app/streamlit_app.py
 ```
 
 1. Pick the engine (defaults to **OpenAI / gpt-5.2**) and paste your key, or set
-   `OPENAI_API_KEY` in the environment. Set **API base URL** if you go through an
+   `OPENAI_API_KEY` in the environment or in `.env`. Set **API base URL** if you go through an
    org gateway or Azure, and raise **Max output tokens** for wide AI facet sets.
 2. Choose facets, write the architecture description, optionally upload an
    architecture diagram.
@@ -315,7 +328,7 @@ Controls v8** as a cross-cutting dimension on every control. Methodology: STRIDE
 ## Testing
 
 ```bash
-uv run pytest -q          # 126 tests, runs fully offline
+uv run pytest -q          # all tests, runs fully offline
 ```
 
 The suite pins the load-bearing rules: `unknown ≠ missing`, PCI double-gating
