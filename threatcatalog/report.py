@@ -9,7 +9,8 @@ other formats (DOCX, JSON) without touching the engine.
 
 from __future__ import annotations
 
-from .models import ControlStatus, ThreatModelReport
+from .declaration import BASIS_LABEL
+from .models import ControlStatus, EvidenceBasis, GapItem, ThreatModelReport
 
 _STATUS_LABEL = {
     ControlStatus.IMPLEMENTED: "Implemented",
@@ -19,6 +20,51 @@ _STATUS_LABEL = {
     ControlStatus.NOT_APPLICABLE: "N/A",
 }
 
+
+_SOURCE_LABEL = {"description": "description", "diagram": "diagram",
+                 "keyword": "description keyword match", "diagram_vision": "diagram"}
+
+
+def _flat(s: str | None) -> str:
+    return " ".join((s or "").split())
+
+
+def basis_label(gi: GapItem) -> str:
+    return BASIS_LABEL.get(gi.basis, "\u2014") if gi.basis else "\u2014"
+
+
+def evidence_records(r: ThreatModelReport) -> list[dict]:
+    """One record per control that has something to show in the evidence
+    appendix — shared by the Markdown and PDF renderers. Every string is
+    whitespace-flattened; renderers do their own escaping."""
+    recs = []
+    for gi in r.gap_items:
+        ev = gi.evidence
+        if gi.basis is None or ev is None:
+            continue
+        ai = None
+        if ev.ai_status is not None:
+            parts = [_STATUS_LABEL[ev.ai_status]]
+            if ev.ai_confidence:
+                parts.append(f"{ev.ai_confidence.value} confidence")
+            if ev.ai_source:
+                parts.append("from " + _SOURCE_LABEL.get(ev.ai_source, ev.ai_source))
+            ai = " \u00b7 ".join(parts)
+        when = ""
+        if ev.reviewed_at:
+            when = ev.reviewed_at.replace("T", " ").replace("+00:00", " UTC")
+        recs.append({
+            "control": f"{gi.control.id} {gi.control.title}",
+            "status": _STATUS_LABEL[gi.status],
+            "basis": basis_label(gi),
+            "ai_suggestion": ai,
+            "quote": _flat(ev.ai_quote) or None,
+            "quote_unverified": ev.quote_verified is False,
+            "ai_note": _flat(ev.ai_note) if ev.ai_status is not None else None,
+            "reviewer_note": _flat(ev.reviewer_note) or None,
+            "reviewed_by": " \u00b7 ".join(x for x in (ev.reviewer, when) if x) or None,
+        })
+    return recs
 
 
 # --------------------------------------------------------------------------- #
@@ -155,6 +201,15 @@ def summary_facts(r: ThreatModelReport) -> dict:
     if r.compensating:
         notes.append(f"{len(r.compensating)} compensating control(s) noted "
                      f"(these soften, but do not eliminate, a finding)")
+    n_ai_only = sum(1 for g in gi if g.basis == EvidenceBasis.AI_UNREVIEWED
+                    and g.status != ControlStatus.UNKNOWN)
+    n_override = sum(1 for g in gi if g.basis == EvidenceBasis.REVIEWER_OVERRIDE)
+    if n_ai_only:
+        notes.append(f"{n_ai_only} control status(es) rest on AI suggestions that no "
+                     f"reviewer has confirmed")
+    if n_override:
+        notes.append(f"{n_override} AI suggestion(s) were overridden by a reviewer "
+                     f"(see the evidence appendix)")
     if n_unknown:
         notes.append(f"{n_unknown} unknown control(s) need confirmation \u2014 treated as "
                      f"clarifications, not findings (unknown \u2260 missing)")
@@ -207,13 +262,13 @@ def render_markdown(r: ThreatModelReport) -> str:
 
     # Gap register
     out.append("## Control gap register\n")
-    out.append("| Control | Status | Frameworks | PCI exposed |")
-    out.append("|---|---|---|---|")
+    out.append("| Control | Status | Basis | Frameworks | PCI exposed |")
+    out.append("|---|---|---|---|---|")
     for gi in r.gap_items:
         fws = ", ".join(f.ref for f in gi.control.threat_frameworks) or "—"
         pci = ", ".join(x.requirement for x in gi.pci_exposed) or "—"
         out.append(f"| {gi.control.id} {gi.control.title} | {_STATUS_LABEL[gi.status]} "
-                   f"| {fws} | {pci} |")
+                   f"| {basis_label(gi)} | {fws} | {pci} |")
     out.append("")
 
     # Threats
@@ -297,4 +352,31 @@ def render_markdown(r: ThreatModelReport) -> str:
                 out.append(f"- {c.title} — [{strides}]")
         out.append("")
 
+    # Evidence appendix — AI rationale and reviewer notes, per control
+    recs = evidence_records(r)
+    if recs:
+        out.append("## Appendix — control evidence & reviewer notes\n")
+        out.append("_What each control's status rests on. AI suggestions are kept as "
+                   "first written; a reviewer's changes are shown alongside them._\n")
+        for rec in recs:
+            out.append(f"- **{_md(rec['control'])}** — {rec['status']} · _{rec['basis']}_")
+            if rec["ai_suggestion"]:
+                out.append(f"  - AI suggested: {rec['ai_suggestion']}")
+            if rec["quote"]:
+                flag = " ⚠ _not found verbatim in the description_" if rec["quote_unverified"] else ""
+                out.append(f"  - Cited evidence: \u201c{_md(rec['quote'])}\u201d{flag}")
+            if rec["ai_note"]:
+                out.append(f"  - AI rationale: {_md(rec['ai_note'])}")
+            if rec["reviewer_note"]:
+                out.append(f"  - Reviewer note: {_md(rec['reviewer_note'])}")
+            if rec["reviewed_by"]:
+                out.append(f"  - Reviewed by: {_md(rec['reviewed_by'])}")
+        out.append("")
+
     return "\n".join(out)
+
+
+def _md(s: str) -> str:
+    """Neutralise Markdown that would break the report layout in free text."""
+    return (s.replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_")
+             .replace("`", "\\`").replace("<", "&lt;").replace("[", "\\["))

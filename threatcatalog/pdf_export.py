@@ -30,7 +30,7 @@ from reportlab.platypus import (HRFlowable, Paragraph, SimpleDocTemplate, Spacer
                                 Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import _STATUS_LABEL, summary_facts
+from .report import _STATUS_LABEL, basis_label, evidence_records, summary_facts
 
 # ---- palette ----
 _NAVY = colors.HexColor("#1f2c4c")
@@ -203,12 +203,13 @@ def render_pdf(r: ThreatModelReport) -> bytes:
 
     # ---- gap register (colour-coded status) ----
     el.append(Paragraph("Control gap register", ss["H2"]))
-    rows = [["Control", "Status", "Frameworks", "PCI exposed"]]
+    rows = [["Control", "Status", "Basis", "Frameworks", "PCI exposed"]]
     for gi in r.gap_items:
         fws = ", ".join(x.ref for x in gi.control.threat_frameworks) or "\u2014"
         pci = ", ".join(x.requirement for x in gi.pci_exposed) or "\u2014"
-        rows.append([f"{gi.control.id}  {gi.control.title}", _status_cell(gi.status, ss), fws, pci])
-    el.append(_table(rows, [7.0 * cm, 2.3 * cm, 4.2 * cm, 3.0 * cm], ss))
+        rows.append([f"{gi.control.id}  {gi.control.title}", _status_cell(gi.status, ss),
+                     basis_label(gi), fws, pci])
+    el.append(_table(rows, [5.4 * cm, 2.1 * cm, 2.8 * cm, 3.6 * cm, 2.6 * cm], ss))
 
     # ---- threats ----
     el.append(Paragraph("Threat model", ss["H2"]))
@@ -287,6 +288,37 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             strides = ", ".join(s.value for s in c.stride) or "unmapped"
             el.append(Paragraph(f"Candidate: {escape(c.title)} [{strides}]", ss["Bull"],
                                 bulletText="\u2022"))
+
+    # ---- evidence appendix ----
+    recs = evidence_records(r)
+    if recs:
+        el.append(Paragraph("Appendix \u2014 control evidence &amp; reviewer notes", ss["H2"]))
+        el.append(Paragraph("What each control's status rests on. AI suggestions are kept as "
+                            "first written; a reviewer's changes are shown alongside them.",
+                            ss["Meta"]))
+        rows = [["Control", "Status / basis", "Evidence &amp; notes"]]
+        for rec in recs:
+            lines = []
+            if rec["ai_suggestion"]:
+                lines.append(f"<b>AI suggested:</b> {escape(rec['ai_suggestion'])}")
+            if rec["quote"]:
+                flag = (f' <font color="{_RED.hexval()}">(not found verbatim in the description)</font>'
+                        if rec["quote_unverified"] else "")
+                lines.append(f"<b>Cited:</b> <i>\u201c{escape(rec['quote'])}\u201d</i>{flag}")
+            if rec["ai_note"]:
+                lines.append(f"<b>AI rationale:</b> {escape(rec['ai_note'])}")
+            if rec["reviewer_note"]:
+                lines.append(f'<font color="{_NAVY.hexval()}"><b>Reviewer note:</b></font> '
+                             f"{escape(rec['reviewer_note'])}")
+            if rec["reviewed_by"]:
+                lines.append(f'<font color="{_GREY.hexval()}">Reviewed by '
+                             f"{escape(rec['reviewed_by'])}</font>")
+            rows.append([rec["control"],
+                         Paragraph(f"<b>{escape(rec['status'])}</b><br/>{escape(rec['basis'])}",
+                                   ss["Cell"]),
+                         Paragraph("<br/>".join(lines) or "\u2014", ss["Cell"])])
+        rows[0] = [Paragraph(h, ss["CellHdr"]) for h in rows[0]]
+        el.append(_table(rows, [4.6 * cm, 2.8 * cm, 9.1 * cm], ss))
 
     doc.build(el)
     return buf.getvalue()

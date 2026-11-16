@@ -12,7 +12,7 @@ dependencies = ["pydantic>=2.5", "PyYAML>=6.0"]
 [project.optional-dependencies]
 llm = ["anthropic>=0.39"]
 openai = ["openai>=1.30"]
-app = ["streamlit>=1.30"]
+app = ["streamlit>=1.45"]
 pdf = ["reportlab>=4.0"]
 dev = ["pytest>=7.4", "reportlab>=4.0"]
 

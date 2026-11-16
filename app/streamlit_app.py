@@ -3,9 +3,11 @@ Streamlit integration surface for the catalog-driven threat modeling engine.
 
 Two-step evidence flow:
 
-  1. "Detect controls" reads the architecture diagram (vision, LLM engines only)
-     and the description (keyword detector), and PRE-FILLS the declaration with
-     what it found — so you review and adjust rather than declare from scratch.
+  1. "Detect controls" reads the description and the architecture diagram (one
+     LLM call; keyword matching offline) and PRE-FILLS the declaration with a
+     status AND an evidence note per control — the AI's reasoning plus the
+     sentence or diagram element it relied on. The reviewer edits status/note;
+     the AI's original suggestion is kept so the report shows both.
   2. "Run threat model" uses the (reviewed) declaration to compute the gap and
      render the report.
 
@@ -16,6 +18,9 @@ Run:  streamlit run app/streamlit_app.py
 
 from __future__ import annotations
 
+import hashlib
+
+import pandas as pd
 import streamlit as st
 
 from threatcatalog.env import load_dotenv
@@ -24,11 +29,14 @@ load_dotenv()  # pick up OPENAI_API_KEY / ANTHROPIC_API_KEY from a local .env
 
 from threatcatalog import pipeline  # noqa: E402
 from threatcatalog.catalog import Catalog, resolve
-from threatcatalog.intake import declaration_template, detect_from_text
-from threatcatalog.models import (AICapability, AppProfile, Confidence,
-                                  ControlStatus, DataClassification,
-                                  LedgerEntry, ObservedControl, PlatformFacet,
-                                  Provenance)
+from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
+                                       apply_detection, apply_edit, ensure_rows,
+                                       evidence_basis, export_json, import_json,
+                                       needs_note, to_ledger)
+from threatcatalog.intake import detect_from_text
+from threatcatalog.models import (AICapability, AppProfile, ControlStatus,
+                                  DataClassification, LedgerEntry,
+                                  ObservedControl, PlatformFacet)
 from threatcatalog.report import render_markdown
 
 st.set_page_config(page_title="Catalog Threat Modeling", layout="wide")
@@ -84,6 +92,11 @@ with st.sidebar:
                  "tokens as well as visible output. Wide facet sets (mcp + agentic) need "
                  "far more than the old 4096 default or the model returns nothing.")
 
+    st.header("Reviewer")
+    st.text_input("Your name", key="reviewer",
+                  help="Recorded with a timestamp against every status or note you "
+                       "change in the declaration, and shown in the report.")
+
     st.header("1 · Application facets")
     name = st.text_input("Application name", "PeopleDesk")
     platforms = st.multiselect("Platform", [p.value for p in PlatformFacet], ["web", "cloud"])
@@ -113,53 +126,177 @@ if diagram_file is not None:
 
 # ---- step 3a: detect controls from diagram + description, pre-fill declaration ----
 st.subheader("3 · Detect & declare")
-st.caption("Detect reads the description (keyword match) and — with an LLM engine — "
-           "the diagram (vision), then pre-fills the declaration below. The diagram "
-           "is read here, not at run time. Vision only ever reports controls it can "
-           "*see*; it never marks one absent, so unseen controls stay 'unknown'.")
+st.caption("Detect reads the description and — with an LLM engine — the diagram, then "
+           "pre-fills the declaration below. Each AI suggestion comes with its reasoning "
+           "and the sentence or diagram element it relied on. The AI only reports controls "
+           "it finds evidence for; it never marks one absent, so unseen controls stay "
+           "'unknown'. The offline engine falls back to keyword matching.")
+
+rows: dict[str, DeclarationRow] = st.session_state.setdefault("decl_rows", {})
+ensure_rows(rows, expected)
+st.session_state.setdefault("decl_ver", 0)
+
+
+def _keyword_detect() -> list[LedgerEntry]:
+    return detect_from_text(description, expected)
+
 
 if st.button("🔍 Detect controls from diagram + description"):
-    detected: dict[str, tuple[str, str]] = {}   # control_id -> (status, source)
-    for e in detect_from_text(description, expected):
-        detected[e.control_id] = (e.status.value, "description")
-    if diagram_image is not None and engine_choice != "Deterministic (offline)":
+    detected: list[LedgerEntry] = []
+    if engine_choice != "Deterministic (offline)" and (description.strip() or diagram_image):
         try:
             eng = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
                                max_tokens=max_out_tokens)
-            for e in eng.extract_controls(expected, diagram_image, diagram_media_type):
-                detected[e.control_id] = (e.status.value, "diagram")   # vision wins over text
-        except Exception as exc:                 # noqa: BLE001 — surface vision/auth errors, keep text detection
-            st.warning(f"Diagram reading skipped ({exc}). Description detection still applied.")
-    elif diagram_image is not None:
-        st.info("Diagram uploaded but the offline engine can't read it — pick OpenAI or "
-                "Anthropic to extract controls from the image.")
-    # write detected statuses into the declaration widgets' state, then rerun
-    for cid, (status, _src) in detected.items():
-        st.session_state[f"decl_{cid}"] = status
-    st.session_state["_detected"] = detected
+            with st.spinner("Reading the description and diagram…"):
+                detected = eng.detect_controls(expected, description, diagram_image,
+                                               diagram_media_type)
+        except Exception as exc:                 # noqa: BLE001 — surface model/auth errors
+            st.warning(f"AI detection failed ({exc}). Fell back to keyword matching on "
+                       "the description.")
+            detected = _keyword_detect()
+    else:
+        detected = _keyword_detect()
+        if diagram_image is not None:
+            st.info("Diagram uploaded but the offline engine can't read it — pick OpenAI or "
+                    "Anthropic to extract controls from the image.")
+    apply_detection(rows, detected, expected)    # never clobbers rows a reviewer touched
+    st.session_state["_detected"] = {e.control_id: (e.detail.ai_source if e.detail else
+                                                    e.provenance.value) for e in detected}
     st.session_state["_detected_done"] = True
+    st.session_state["decl_ver"] += 1
     st.rerun()
 
 _detected = st.session_state.get("_detected", {})
-if _detected:
-    by_diagram = sum(1 for _, s in _detected.values() if s == "diagram")
-    by_desc = sum(1 for _, s in _detected.values() if s == "description")
-    st.success(f"Pre-filled {len(_detected)} control(s) — {by_diagram} from the diagram, "
-               f"{by_desc} from the description. Review and adjust below.")
+if st.session_state.get("_detected_done"):
+    by_src = {}
+    for src in _detected.values():
+        by_src[src] = by_src.get(src, 0) + 1
+    parts = ", ".join(f"{n} from the {k.replace('keyword', 'description (keywords)')}"
+                      for k, n in sorted(by_src.items())) or "none"
+    st.success(f"AI found evidence for {len(_detected)} control(s): {parts}. Review the "
+               "statuses and notes below; anything you change is recorded under your name.")
 
-# ---- step 3b: declaration (pre-filled from detection where available) ----
-declared: list[LedgerEntry] = []
-with st.expander("Control declaration", expanded=bool(_detected)):
-    for q in declaration_template(expected):
-        cid = q["control_id"]
-        src = _detected.get(cid, (None, None))[1]
-        label = f"{cid} · {q['title']}" + (f"   ⟵ from {src}" if src else "")
-        # key-based default: session_state[f"decl_{cid}"] (set by Detect) pre-selects it
-        status = st.selectbox(label, STATUS_OPTIONS, key=f"decl_{cid}", help=q["question"])
-        if status != "unknown":
-            declared.append(LedgerEntry(
-                control_id=cid, status=ControlStatus(status),
-                provenance=Provenance.DECLARED, confidence=Confidence.HIGH))
+# ---- step 3b: declaration table (status + evidence note per control) ----
+_LAYER_OF = {c.id: c.layers[0].value for c in expected}
+_CTRL = {c.id: c for c in expected}
+
+
+def _ai_label(row: DeclarationRow) -> str:
+    ev = row.evidence
+    if ev.ai_status is None:
+        return "no evidence found" if st.session_state.get("_detected_done") else "—"
+    bits = [ev.ai_status.value, (ev.ai_confidence.value if ev.ai_confidence else ""),
+            (ev.ai_source or "")]
+    label = " · ".join(b for b in bits if b)
+    if ev.quote_verified is False:
+        label += "  ⚠ quote not found"
+    return label
+
+
+with st.expander("Control declaration", expanded=True):
+    st.caption("Each control has an editable note, pre-filled with the AI's reasoning. "
+               "Change the status or the note to record your own assessment; the AI's "
+               "original suggestion is kept and both appear in the report. Tick "
+               "'Reviewed' to confirm an AI suggestion as-is.")
+
+    # save / load — declarations survive a page refresh and carry across ARB rounds
+    c1, c2 = st.columns([1, 2])
+    c1.download_button(
+        "💾 Save declaration (JSON)",
+        export_json(rows, meta={"application": profile.name,
+                                "reviewer": st.session_state.get("reviewer") or None}),
+        file_name=f"{profile.name.replace(' ', '_')}_declaration.json",
+        mime="application/json")
+    upload = c2.file_uploader("Load a saved declaration", type=["json"], key="decl_upload",
+                              label_visibility="collapsed")
+    if upload is not None:
+        blob = upload.getvalue()
+        digest = hashlib.sha256(blob).hexdigest()
+        if digest != st.session_state.get("_decl_loaded"):
+            try:
+                loaded, meta = import_json(blob)
+            except ValueError as exc:
+                st.error(f"Could not load that file: {exc}")
+            else:
+                rows.update(loaded)
+                ensure_rows(rows, expected)
+                st.session_state["_decl_loaded"] = digest
+                st.session_state["_detected_done"] = True
+                st.session_state["decl_ver"] += 1
+                st.rerun()
+        else:
+            st.caption("Declaration loaded from file.")
+
+    layers = sorted({_LAYER_OF[c.id] for c in expected})
+    f1, f2 = st.columns([3, 1])
+    shown_layers = f1.multiselect("Show layers", layers, default=layers)
+    only_attention = f2.checkbox("Only rows needing a note", value=False)
+
+    visible = [c.id for c in expected if _LAYER_OF[c.id] in shown_layers
+               and (not only_attention or needs_note(rows[c.id]))]
+    cols = ["ID", "Control", "Status", "Note", "Reviewed", "AI suggestion", "AI cited",
+            "Basis", "Question", "Layer"]
+    table = pd.DataFrame([{
+        "ID": cid,
+        "Control": _CTRL[cid].title,
+        "Status": rows[cid].status.value,
+        "Note": rows[cid].evidence.note or "",
+        "Reviewed": rows[cid].evidence.reviewed,
+        "AI suggestion": _ai_label(rows[cid]),
+        "AI cited": rows[cid].evidence.ai_quote or "",
+        "Basis": BASIS_LABEL.get(evidence_basis(rows[cid].status, rows[cid].evidence), ""),
+        "Question": _CTRL[cid].assessment_signal,
+        "Layer": _LAYER_OF[cid],
+    } for cid in visible], columns=cols)
+
+    view_key = hashlib.sha1(("|".join(shown_layers) + str(only_attention)).encode()).hexdigest()[:8]
+    edited = st.data_editor(
+        table, key=f"decl_editor_{st.session_state['decl_ver']}_{view_key}",
+        hide_index=True, use_container_width=True, num_rows="fixed",
+        height=min(36 * (len(table) + 1) + 3, 720),
+        disabled=["ID", "Layer", "Control", "Question", "AI suggestion", "AI cited", "Basis"],
+        column_config={
+            "Control": st.column_config.TextColumn(width="medium", pinned=True),
+            "ID": st.column_config.TextColumn(pinned=True),
+            "Question": st.column_config.TextColumn(width="medium"),
+            "AI cited": st.column_config.TextColumn(
+                width="medium", help="Sentence from the description, or diagram element, "
+                                     "the AI relied on"),
+            "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True,
+                                                       width="small"),
+            "Note": st.column_config.TextColumn(
+                width="large", max_chars=2000,
+                help="Pre-filled with the AI's reasoning. Edit to add or replace with your "
+                     "own assessment."),
+            "Reviewed": st.column_config.CheckboxColumn(
+                help="Tick to confirm the AI suggestion after checking it"),
+        })
+
+    changed = False
+    who = st.session_state.get("reviewer") or ""
+    for rec in edited.to_dict("records"):
+        note = rec["Note"] if isinstance(rec["Note"], str) else None
+        status = rec["Status"] if isinstance(rec["Status"], str) else "unknown"
+        changed |= apply_edit(rows[rec["ID"]], ControlStatus(status), note,
+                              bool(rec["Reviewed"]), who)
+    if changed:
+        st.rerun()                                # refresh Basis / attention columns
+
+    # soft prompt (never blocks the run): rows where a reviewer note is expected
+    attention = [(cid, needs_note(rows[cid])) for cid in (c.id for c in expected)]
+    attention = [(cid, why) for cid, why in attention if why]
+    if attention:
+        st.warning(f"{len(attention)} control(s) would benefit from a reviewer note — "
+                   "you can still run the threat model without them. Tick 'Only rows "
+                   "needing a note' to filter to them.")
+        with st.expander("Which ones and why"):
+            for cid, why in attention:
+                st.markdown(f"- **{cid}** {_CTRL[cid].title} — {why}")
+    if not who.strip():
+        st.caption("Tip: enter your name under *Reviewer* in the sidebar so changes are "
+                   "attributed to you in the report.")
+
+declared: list[LedgerEntry] = to_ledger(rows, expected)
 
 obs_raw = st.text_area("Other controls you implement that may not be in the catalog "
                        "(one per line: name — description)", height=80)
@@ -176,6 +313,8 @@ if st.button("Run threat model", type="primary"):
     if diagram_image is not None and not st.session_state.get("_detected_done"):
         st.warning("You uploaded a diagram but didn't click Detect — it won't be read. "
                    "Click Detect first to pull controls from the image.")
+    if attention:
+        st.toast(f"Running with {len(attention)} control(s) still missing a reviewer note.")
     try:
         engine = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
                               max_tokens=max_out_tokens)

@@ -197,12 +197,50 @@ class AppProfile(BaseModel):
 # --------------------------------------------------------------------------- #
 # Implemented-controls ledger (the evidence path's output)
 # --------------------------------------------------------------------------- #
+class EvidenceBasis(str, Enum):
+    """What a control's final status rests on — the audit answer to 'who said so?'."""
+    AI_UNREVIEWED = "ai_unreviewed"          # AI suggestion, no human has looked at it
+    AI_CONFIRMED = "ai_confirmed"            # AI suggestion a reviewer confirmed
+    REVIEWER_OVERRIDE = "reviewer_override"  # reviewer changed the AI's status
+    REVIEWER_ONLY = "reviewer_only"          # no AI suggestion; reviewer declared it
+
+
+class ControlEvidence(BaseModel):
+    """Per-control evidence note. The AI's original suggestion (`ai_*`) is kept
+    verbatim and never overwritten by a reviewer; `note` is the editable box the
+    reviewer sees, pre-filled with the AI's rationale. The report shows both when
+    they differ, so the ARB can see what the AI claimed and what a human changed."""
+
+    ai_status: Optional[ControlStatus] = None
+    ai_confidence: Optional[Confidence] = None
+    ai_source: Optional[str] = None          # "description" | "diagram" | "keyword"
+    ai_note: Optional[str] = None            # the AI's rationale, as first written
+    ai_quote: Optional[str] = None           # verbatim excerpt / diagram element cited
+    quote_verified: Optional[bool] = None    # description quotes are checked against the text
+    note: Optional[str] = None               # current content of the editable box
+    reviewed: bool = False
+    reviewer: Optional[str] = None
+    reviewed_at: Optional[str] = None        # ISO-8601 UTC of the reviewer's last change
+
+    @property
+    def note_edited(self) -> bool:
+        """True when the box no longer holds the AI's original text."""
+        return (self.note or "").strip() != (self.ai_note or "").strip()
+
+    @property
+    def reviewer_note(self) -> Optional[str]:
+        """The reviewer's own words, if they changed the box."""
+        n = (self.note or "").strip()
+        return n if (n and self.note_edited) else None
+
+
 class LedgerEntry(BaseModel):
     control_id: str
     status: ControlStatus
     provenance: Provenance
     confidence: Confidence
     evidence: Optional[str] = None
+    detail: Optional[ControlEvidence] = None   # AI rationale + reviewer note, when present
 
 
 class ObservedControl(BaseModel):
@@ -234,6 +272,8 @@ class GapItem(BaseModel):
     status: ControlStatus
     pci_exposed: list[PciRef] = Field(default_factory=list)
     compensating_notes: list[str] = Field(default_factory=list)
+    evidence: Optional[ControlEvidence] = None
+    basis: Optional[EvidenceBasis] = None
 
     @property
     def is_finding(self) -> bool:
