@@ -7,3 +7,8 @@ venv/
 build/
 dist/
 .DS_Store
+
+# local secrets (API keys)
+.env
+.env.*
+!.env.example

@@ -18,7 +18,11 @@ from __future__ import annotations
 
 import streamlit as st
 
-from threatcatalog import pipeline
+from threatcatalog.env import load_dotenv
+
+load_dotenv()  # pick up OPENAI_API_KEY / ANTHROPIC_API_KEY from a local .env
+
+from threatcatalog import pipeline  # noqa: E402
 from threatcatalog.catalog import Catalog, resolve
 from threatcatalog.intake import declaration_template, detect_from_text
 from threatcatalog.models import (AICapability, AppProfile, Confidence,
