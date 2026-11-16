@@ -19,7 +19,7 @@ simply use `DeterministicArtifactEngine`, whose extractor is a no-op.
 
 from __future__ import annotations
 
-from ..models import (AppProfile, Confidence, ControlStatus, DreadScore, GapItem,
+from ..models import (AppProfile, Confidence, ControlEvidence, ControlStatus, DreadScore, GapItem,
                       Layer, LedgerEntry, Mitigation, ObservedControl,
                       OutOfCatalogAssessment, Provenance, Recommendation, Stride,
                       Threat)
@@ -143,31 +143,64 @@ class LLMArtifactEngine:
     # ---- diagram vision: reports only controls it can SEE, never absence ----
     def extract_controls(self, expected, diagram_image: bytes | None = None,
                          diagram_media_type: str = "image/png") -> list[LedgerEntry]:
-        if not diagram_image or not hasattr(self.raw, "complete_json_image"):
+        """Diagram-only extraction (pipeline path). Same parser as Detect."""
+        if not diagram_image:
             return []
-        import base64
-        b64 = base64.b64encode(diagram_image).decode()
-        system, user = prompts.vision_prompt(expected)
-        data = self.raw.complete_json_image(system, user, b64, diagram_media_type)
+        return self.detect_controls(expected, "", diagram_image, diagram_media_type)
+
+    def detect_controls(self, expected, description: str = "",
+                        diagram_image: bytes | None = None,
+                        diagram_media_type: str = "image/png") -> list[LedgerEntry]:
+        """Read the description and/or diagram in ONE call and return an entry per
+        evidenced control, each carrying the AI's rationale and cited source.
+        Description quotes are checked against the text (`quote_verified`)."""
+        from ..intake import quote_in_text
+        has_img = bool(diagram_image) and hasattr(self.raw, "complete_json_image")
+        if not description.strip() and not has_img:
+            return []
+        system, user = prompts.detect_prompt(expected, description, has_diagram=has_img)
+        if has_img:
+            import base64
+            b64 = base64.b64encode(diagram_image).decode()
+            data = self.raw.complete_json_image(system, user, b64, diagram_media_type)
+        else:
+            data = self.raw.complete_json(system, user)
 
         valid = {c.id for c in expected}
         entries: list[LedgerEntry] = []
+        seen: set[str] = set()
         for d in _listify(data, "controls", "items"):
             if not isinstance(d, dict):
                 continue
             cid = _as_opt_str(d.get("control_id"))
-            if cid not in valid:
+            if cid not in valid or cid in seen:
                 continue
+            seen.add(cid)
             status = _as_str(d.get("status"), "implemented")
             if status not in ("implemented", "partial"):
-                status = "implemented"          # vision never asserts absence
+                status = "implemented"          # detection never asserts absence
             conf = _as_str(d.get("confidence"), "medium")
             if conf not in ("low", "medium", "high"):
                 conf = "medium"
+            source = _as_str(d.get("source"), "")
+            if source not in ("description", "diagram"):
+                source = "diagram" if (has_img and not description.strip()) else \
+                         ("description" if not has_img else "diagram")
+            quote = _as_opt_str(d.get("quote")) or _as_opt_str(d.get("evidence"))
+            rationale = _as_opt_str(d.get("rationale")) or _as_opt_str(d.get("evidence"))
+            verified = None
+            if source == "description":
+                verified = quote_in_text(quote, description)
+                if not verified and conf == "high":
+                    conf = "medium"             # unverifiable citation caps confidence
+            prov = Provenance.DIAGRAM_VISION if source == "diagram" else Provenance.DESCRIPTION
             entries.append(LedgerEntry(
-                control_id=cid, status=ControlStatus(status),
-                provenance=Provenance.DIAGRAM_VISION, confidence=Confidence(conf),
-                evidence=_as_opt_str(d.get("evidence"))))
+                control_id=cid, status=ControlStatus(status), provenance=prov,
+                confidence=Confidence(conf), evidence=quote or rationale,
+                detail=ControlEvidence(
+                    ai_status=ControlStatus(status), ai_confidence=Confidence(conf),
+                    ai_source=source, ai_note=rationale, ai_quote=quote,
+                    quote_verified=verified, note=rationale)))
         return entries
 
     # ---- threats ----

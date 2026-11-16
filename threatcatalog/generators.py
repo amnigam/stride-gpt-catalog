@@ -36,6 +36,9 @@ from .models import (AppProfile, ControlStatus, DataClassification, DreadScore,
 class ArtifactEngine(Protocol):
     def extract_controls(self, expected, diagram_image: bytes | None = None,
                          diagram_media_type: str = "image/png") -> list[LedgerEntry]: ...
+    def detect_controls(self, expected, description: str = "",
+                        diagram_image: bytes | None = None,
+                        diagram_media_type: str = "image/png") -> list[LedgerEntry]: ...
     def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]: ...
     def generate_recommendations(self, gap: list[GapItem], profile: AppProfile) -> list[Recommendation]: ...
     def generate_mitigations(self, threats: list[Threat], gap: list[GapItem],
@@ -62,6 +65,12 @@ class DeterministicArtifactEngine:
     def extract_controls(self, expected, diagram_image=None,
                          diagram_media_type="image/png") -> list[LedgerEntry]:
         return []  # offline: no vision; the pipeline uses the text detector + declaration
+
+    def detect_controls(self, expected, description: str = "", diagram_image=None,
+                        diagram_media_type="image/png") -> list[LedgerEntry]:
+        """Offline Detect: keyword matching over the description only."""
+        from .intake import detect_from_text
+        return detect_from_text(description, expected)
 
     # ---- threats ----
     def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]:

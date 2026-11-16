@@ -104,7 +104,8 @@ output-token budget than a plain web app — see
 | `models.py` | Typed Pydantic models + enums (one source of truth) | — |
 | `catalog/loader.py` | YAML → validated `Control`s (the gate) | ✅ |
 | `catalog/resolver.py` | facets → expected set, with AI-tier inheritance | ✅ |
-| `intake.py` | declaration template, text detector, ledger merge | ✅ |
+| `intake.py` | declaration template, text detector, quote check, ledger merge | ✅ |
+| `declaration.py` | reviewed declaration rows: AI suggestion vs reviewer edit, basis, save/load | ✅ |
 | `gap.py` | **the gap engine** — expected vs implemented | ✅ |
 | `pci.py` | PCI DSS v4.0.1 view (second read off the gap) | ✅ |
 | `out_of_catalog.py` | judge unmatched controls, flag candidates | uses engine |
@@ -175,10 +176,26 @@ uv run streamlit run app/streamlit_app.py
    org gateway or Azure, and raise **Max output tokens** for wide AI facet sets.
 2. Choose facets, write the architecture description, optionally upload an
    architecture diagram.
-3. **Detect controls** — reads the description (keywords) and the diagram (vision,
-   LLM engines only) and **pre-fills the declaration** with what it found.
-4. Review/adjust the declaration and **Run**. Download the report as **Markdown**
-   or **PDF**.
+3. Enter your name under **Reviewer** in the sidebar.
+4. **Detect controls** — with an LLM engine, one call reads the description *and* the
+   diagram; offline, keyword matching reads the description. It **pre-fills the
+   declaration** with a status and an **evidence note** per control: the AI's reasoning
+   plus the sentence (or diagram element) it relied on. A quoted sentence that is not
+   actually in the description is flagged and its confidence capped. The AI never marks
+   a control absent.
+5. Review the declaration table. Change a **Status** or edit the **Note** to record your
+   own assessment, or tick **Reviewed** to confirm an AI suggestion as-is. Your name and
+   a UTC timestamp are recorded; the AI's original suggestion is never overwritten.
+   Rows where a reviewer note is expected (an override, or partial / not present with no
+   note) are flagged, but nothing blocks the run. Re-running Detect leaves rows you
+   touched alone. **Save declaration (JSON)** and load it again later to carry a review
+   across sessions or ARB rounds.
+6. **Run**. The gap register gains a **Basis** column (AI not reviewed / AI, reviewer
+   confirmed / Reviewer override / Reviewer), the executive summary counts statuses that
+   rest on unreviewed AI suggestions, and an **evidence appendix** shows, per control, the
+   AI suggestion, cited evidence, AI rationale, reviewer note and who reviewed it when.
+   Notes on partial / not-present controls are also passed to the threat and DREAD
+   prompts so findings name what is actually missing. Download as **Markdown** or **PDF**.
 
 The left-nav **Control Catalog** page is a browsable, filterable reference of
 every control with a plain-language description — useful to share with the app
