@@ -118,3 +118,28 @@
   - isolation testing
   - tenant leakage
   - multi-tenant pentest
+- id: SAAS-KEY-001
+  title: Per-tenant encryption keys (BYOK)
+  intent: Tenant data can be encrypted with per-tenant or customer-managed keys, with crypto-shredding on exit.
+  guidance: Large enterprise customers often require that their data is encrypted with keys they control and
+    can revoke. Per-tenant keys also limit the blast radius of a key compromise and let you prove deletion
+    by destroying the key when a tenant leaves.
+  layers:
+  - platform.saas
+  stride:
+  - InformationDisclosure
+  default_expectation: recommended
+  assessment_signal: Can tenant data be encrypted with per-tenant or customer-managed keys, with crypto-shredding
+    on exit?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 3
+    version: '8.1'
+  pci:
+  - requirement: 3.6.1
+  detect_keywords:
+  - byok
+  - customer-managed keys
+  - per-tenant key
+  - hyok
+  notes: 'See also: CLD-KMS-001, SAAS-ISO-001.'

@@ -81,3 +81,26 @@
   - framework: cis_v8
     ref: Control 8
     version: '8.1'
+- id: MCP-PIN-001
+  title: MCP tool-definition pinning (rug-pull detection)
+  intent: Approved MCP server versions and tool definitions are pinned, and any change is detected and re-approved.
+  guidance: An MCP server can be trusted on day one and change its tool descriptions or behaviour later (a
+    'rug pull'). Pin server versions, hash the approved tool definitions, and block or re-review when they
+    change.
+  layers:
+  - ai.mcp
+  stride:
+  - Tampering
+  assessment_signal: Are MCP server versions and tool definitions pinned, with changes detected and re-approved?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 2
+    version: '8.1'
+  - framework: owasp_mcp
+    ref: MCP03:2025
+    version: beta-phase3
+  detect_keywords:
+  - tool pinning
+  - rug pull
+  - tool definition hash
+  notes: 'See also: MCP-TRUST-001, MCP-DESC-001.'

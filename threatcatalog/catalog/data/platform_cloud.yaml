@@ -84,20 +84,22 @@
     ref: Control 12
     version: '8.1'
 - id: IMMUT-001
-  title: Immutable infrastructure
-  intent: Hosts are deployed from versioned images and replaced rather than modified in place; no manual
-    drift.
+  title: Immutable infrastructure and configuration drift management
+  intent: Hosts are deployed from versioned images and replaced rather than modified in place; infrastructure
+    and security configuration is version-controlled, reviewed and monitored for drift.
   guidance: Instead of logging in to patch a running server (which causes 'works-on-that-box' drift and
     hides tampering), rebuild from a versioned, hardened image and replace it. Immutable, infrastructure-as-code
-    deployments make configuration auditable and tampering obvious.
+    deployments make configuration auditable and tampering obvious. Keep infrastructure and security
+    configuration as reviewed code, and run drift detection so any out-of-band change is flagged and reverted.
   layers:
   - platform.cloud
   - platform.onprem
   stride:
   - Tampering
   default_expectation: recommended
-  assessment_signal: Are hosts deployed from versioned images and replaced (not patched in place) with
-    no manual drift?
+  assessment_signal: Are hosts deployed from versioned images and replaced (not patched in place), with
+    configuration as reviewed code and drift detection in place?
+  notes: Absorbs the proposed CFG-DRIFT-001 (secure configuration and drift management). See also CLD-CSPM-001.
   threat_frameworks:
   - framework: cis_v8
     ref: Control 4
@@ -110,4 +112,79 @@
   - infrastructure as code
   - rebuild not patch
   - no drift
+  - drift detection
   - terraform
+- id: CLD-CSPM-001
+  title: Cloud posture management and guardrails
+  intent: Organisation-level guardrails block risky configurations, and posture management detects drift from
+    them.
+  guidance: One click can make a bucket public. Organisation policies (SCPs, Azure Policy, GCP org policies)
+    should block the riskiest misconfigurations outright, and a posture management tool should continuously
+    flag anything that drifts from the baseline.
+  layers:
+  - platform.cloud
+  stride:
+  - InformationDisclosure
+  - ElevationOfPrivilege
+  assessment_signal: Do org-level policies block risky cloud configurations, with posture management detecting
+    drift?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 4
+    version: '8.1'
+  pci:
+  - requirement: 2.2.1
+  detect_keywords:
+  - cspm
+  - service control policy
+  - azure policy
+  - org policy
+  - security hub
+  notes: 'See also: IMMUT-001, CLD-SG-001.'
+- id: CLD-LOG-001
+  title: Cloud control-plane audit logging
+  intent: Cloud control-plane activity is logged, protected from tampering and sent to the central SIEM.
+  guidance: Application logs do not show who changed an IAM policy or deleted a database. Enable the provider's
+    control-plane logs (CloudTrail, Azure Activity Log, GCP Audit Logs) in every account and region, protect
+    them from deletion and forward them to the SIEM.
+  layers:
+  - platform.cloud
+  stride:
+  - Repudiation
+  assessment_signal: Are cloud control-plane logs enabled everywhere, tamper-protected and sent to the SIEM?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 8
+    version: '8.1'
+  pci:
+  - requirement: 10.2.1
+  detect_keywords:
+  - cloudtrail
+  - activity log
+  - cloud audit logs
+  notes: 'See also: LOG-AUD-001, LOG-CORR-001.'
+- id: CLD-PE-001
+  title: Private endpoints for managed services
+  intent: Databases, storage, queues and secrets stores are reached over private endpoints with public access
+    disabled.
+  guidance: Managed cloud services often have a public endpoint by default, protected only by credentials.
+    Use private endpoints or service endpoints so traffic stays on the private network, and disable public
+    access.
+  layers:
+  - platform.cloud
+  stride:
+  - InformationDisclosure
+  assessment_signal: Are managed data services reached via private endpoints with public network access disabled?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 12
+    version: '8.1'
+  pci:
+  - requirement: 1.3.1
+  detect_keywords:
+  - private endpoint
+  - privatelink
+  - private link
+  - vpc endpoint
+  - private service connect
+  notes: 'See also: CLD-SEG-001.'

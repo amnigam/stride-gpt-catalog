@@ -28,11 +28,12 @@ _STATUS_LABEL = {
 _FACET_LABEL = {
     "web": "web", "cloud": "cloud", "onprem": "on-premises", "mobile": "mobile",
     "multitenant": "multi-tenant SaaS", "api": "API",
+    "messaging": "event-driven", "container": "containerised",
 }
 _AI_LABEL = {
     "llm": "an LLM integration", "llm_tools": "an LLM with tool access",
     "mcp": "an MCP tool integration", "agentic": "agentic AI",
-    "generative": "generative AI",
+    "generative": "generative AI", "training": "in-house model training",
 }
 
 

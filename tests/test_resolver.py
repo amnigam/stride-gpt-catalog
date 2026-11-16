@@ -94,3 +94,24 @@ def test_cloud_workload_excludes_web_and_saas(catalog):
         _profile([PlatformFacet.CLOUD], [AICapability.NONE]), catalog.controls)}
     assert "WEB-WAF-001" not in ids and "SAAS-ISO-001" not in ids
     assert "CLD-SEG-001" in ids
+
+
+def test_messaging_and_container_facets_select_their_layers(catalog):
+    p = _profile([PlatformFacet.API, PlatformFacet.MESSAGING, PlatformFacet.CONTAINER],
+                 [AICapability.NONE])
+    layers = active_layers(p)
+    assert {Layer.PLATFORM_MESSAGING, Layer.PLATFORM_CONTAINER} <= layers
+    ids = {c.id for c in resolve(p, catalog.controls)}
+    assert {"MSG-AUTH-001", "MSG-REPLAY-001", "CTR-RUN-001"} <= ids
+
+
+def test_messaging_controls_absent_without_facet(catalog):
+    ids = {c.id for c in resolve(_profile([PlatformFacet.WEB], [AICapability.NONE]),
+                                 catalog.controls)}
+    assert "MSG-AUTH-001" not in ids and "CTR-K8S-001" not in ids
+
+
+def test_training_inherits_llm_but_not_tools():
+    layers = active_layers(_profile([PlatformFacet.CLOUD], [AICapability.TRAINING]))
+    assert {Layer.AI_LLM, Layer.AI_TRAINING} <= layers
+    assert Layer.AI_LLM_TOOLS not in layers

@@ -129,3 +129,82 @@
   - metadata endpoint
   - url allowlist
   - outbound fetch
+- id: API-FPA-001
+  title: Function- and property-level authorization
+  intent: Sensitive API functions and individual object properties are authorised server-side; responses return
+    only permitted fields.
+  guidance: Object-level checks are not enough. Admin-only functions must reject ordinary callers (OWASP API5)
+    and each property must be checked so callers cannot read hidden fields or write ones like 'role' or 'balance'
+    through mass assignment (OWASP API3).
+  layers:
+  - platform.api
+  stride:
+  - ElevationOfPrivilege
+  - InformationDisclosure
+  assessment_signal: Are API functions and individual properties authorised server-side, with responses minimised
+    to permitted fields?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 6
+    version: '8.1'
+  - framework: owasp_api
+    ref: API3:2023
+    version: '2023'
+  - framework: owasp_api
+    ref: API5:2023
+    version: '2023'
+  pci:
+  - requirement: 7.2.1
+  detect_keywords:
+  - function-level authorization
+  - property-level authorization
+  - mass assignment
+  - bopla
+  notes: 'See also: API-BOLA-001, IAM-LPA-001.'
+- id: API-HOOK-001
+  title: Webhook and callback authentication
+  intent: Inbound webhooks and callbacks are verified by signature, timestamp and source before they change
+    state.
+  guidance: A webhook endpoint is a public URL that changes state, such as marking an order paid. Every inbound
+    call should be verified with the sender's signature (HMAC or JWS), rejected if the timestamp is stale,
+    and ideally restricted to the sender's published source ranges.
+  layers:
+  - platform.api
+  stride:
+  - Spoofing
+  - Tampering
+  assessment_signal: Are inbound webhooks verified by signature and timestamp before acting on them?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  detect_keywords:
+  - webhook signature
+  - hmac signature
+  - signed webhook
+  - callback verification
+  notes: 'See also: API-AUTHN-001, BIZ-TXN-001.'
+- id: API-CONS-001
+  title: Safe consumption of third-party APIs
+  intent: Data from partner and third-party APIs is validated, size-limited and treated as untrusted.
+  guidance: Developers tend to trust data from a well-known partner more than user input. If that partner is
+    compromised or wrong, your app is too. Validate and bound everything a third-party API returns, follow
+    redirects carefully and use TLS with certificate validation (OWASP API10:2023).
+  layers:
+  - platform.api
+  stride:
+  - Tampering
+  assessment_signal: Is data returned by third-party APIs validated and treated as untrusted input?
+  threat_frameworks:
+  - framework: cis_v8
+    ref: Control 16
+    version: '8.1'
+  - framework: owasp_api
+    ref: API10:2023
+    version: '2023'
+  pci:
+  - requirement: 6.2.4
+  detect_keywords:
+  - unsafe consumption
+  - validate third-party responses
+  notes: 'See also: EXT-TPR-001, IN-VAL-001.'

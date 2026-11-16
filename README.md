@@ -53,8 +53,8 @@ altitude, wrong tool, and a deliberate scoping choice.
 
 Platform facets are **composable and orthogonal**; the resolver unions the
 control layers an app's facets select. AI-capability facets are **tiered** and
-inherit downward (`llm ⊂ llm_tools ⊂ {mcp, agentic}`; `generative` is a
-side-branch that still inherits `llm`).
+inherit downward (`llm ⊂ llm_tools ⊂ {mcp, agentic}`; `generative` and
+`training` are side-branches that still inherit `llm`).
 
 | You are modelling… | Facets | What that adds |
 |---|---|---|
@@ -63,7 +63,9 @@ side-branch that still inherits `llm`).
 | **Multi-tenant SaaS** | `web` + `cloud` + `multitenant` | adds the **tenant-isolation** layer |
 | API service | `api` (+ `cloud`) | **OWASP API Top 10** surface |
 | Mobile app | `mobile` | MASVS + **OWASP Mobile Top 10** |
-| …with AI | add `llm` / `llm_tools` / `mcp` / `agentic` / `generative` | inherits the tiers below |
+| Event-driven / batch integrations | add `messaging` | broker auth, replay, schema, DLQ, file transfer |
+| Runs on containers / Kubernetes | add `container` | image signing, runtime hardening, cluster RBAC |
+| …with AI | add `llm` / `llm_tools` / `mcp` / `agentic` / `generative` / `training` | inherits the tiers below |
 
 This is the SaaS differentiation made explicit: the `multitenant` facet is what
 separates a true SaaS product (tenant data isolation, per-tenant authz, tenant
@@ -75,10 +77,10 @@ most of the catalog at once:
 
 | Facets | Layers | Expected controls |
 | --- | --- | --- |
-| `web` + `cloud` | 3 | 20 |
-| `web` + `cloud` + `multitenant` | 4 | 25 |
-| `web` + `cloud` + `llm` | 4 | 29 |
-| `web` + `cloud` + `mcp,llm,llm_tools,agentic` | 7 | **44 of 61** |
+| `web` + `cloud` | 3 | 53 |
+| `web` + `cloud` + `multitenant` | 4 | 59 |
+| `web` + `cloud` + `llm` | 4 | 71 |
+| `web` + `cloud` + `mcp,llm,llm_tools,agentic` | 7 | **90 of 123** |
 
 The whole gap goes into every prompt, and the model is asked for one record per
 not-present/partial control. A wide AI profile therefore needs a much larger
@@ -266,8 +268,8 @@ shape, since it accepts both a bare array and a `{"threats": [...]}` wrapper.
 
 ## The catalog
 
-Layered YAML under `threatcatalog/catalog/data/` — **61 controls** across 12
-layers. A control is tagged with **every layer it applies to**, and the resolver
+Layered YAML under `threatcatalog/catalog/data/` — **123 controls** across 15
+layers (33 of them in `base`, which applies to every app). A control is tagged with **every layer it applies to**, and the resolver
 unions the layers an app's facets select. Each control carries a verbose
 `guidance` field (plain language, for app teams / PMs) in addition to its
 one-line `intent` and the `assessment_signal` used to judge it.

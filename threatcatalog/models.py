@@ -43,11 +43,14 @@ class Layer(str, Enum):
     PLATFORM_MOBILE = "platform.mobile"
     PLATFORM_SAAS = "platform.saas"        # multi-tenant SaaS concerns
     PLATFORM_API = "platform.api"          # API as a first-class attack surface
+    PLATFORM_MESSAGING = "platform.messaging"  # event bus / queue / file-transfer integrations
+    PLATFORM_CONTAINER = "platform.container"  # containers and Kubernetes
     AI_LLM = "ai.llm"
     AI_LLM_TOOLS = "ai.llm_tools"
     AI_MCP = "ai.mcp"
     AI_AGENTIC = "ai.agentic"
     AI_GENERATIVE = "ai.generative"
+    AI_TRAINING = "ai.training"            # app trains or fine-tunes its own models
 
 
 class PlatformFacet(str, Enum):
@@ -57,6 +60,8 @@ class PlatformFacet(str, Enum):
     MOBILE = "mobile"
     MULTITENANT = "multitenant"            # SaaS / multi-tenant deployment
     API = "api"                            # exposes an API surface
+    MESSAGING = "messaging"                # uses an event bus, queue or batch file transfer
+    CONTAINER = "container"                # runs on containers / Kubernetes
 
 
 class AICapability(str, Enum):
@@ -69,6 +74,7 @@ class AICapability(str, Enum):
     MCP = "mcp"
     AGENTIC = "agentic"
     GENERATIVE = "generative"
+    TRAINING = "training"                  # trains or fine-tunes models on its own data
 
 
 class Stride(str, Enum):

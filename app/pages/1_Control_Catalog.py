@@ -34,11 +34,14 @@ LAYER_BLURB = {
     Layer.PLATFORM_MOBILE: "Mobile clients (OWASP MASVS + Mobile Top 10 2024).",
     Layer.PLATFORM_SAAS: "Multi-tenant SaaS concerns — activated by the 'multitenant' facet.",
     Layer.PLATFORM_API: "API as a first-class attack surface (OWASP API Top 10 2023).",
+    Layer.PLATFORM_MESSAGING: "Event buses, queues and batch file transfer — activated by the 'messaging' facet.",
+    Layer.PLATFORM_CONTAINER: "Containers and Kubernetes — activated by the 'container' facet.",
     Layer.AI_LLM: "LLM-integrated apps (OWASP LLM Top 10 2025).",
     Layer.AI_LLM_TOOLS: "LLMs that call tools / functions.",
     Layer.AI_MCP: "Apps using Model Context Protocol servers (OWASP MCP Top 10, beta).",
     Layer.AI_AGENTIC: "Autonomous / agentic systems (OWASP Agentic/ASI Top 10 2026).",
     Layer.AI_GENERATIVE: "Generative output & provenance risks.",
+    Layer.AI_TRAINING: "Apps that train or fine-tune their own models (OWASP LLM04).",
 }
 
 # ---- summary metrics ----
