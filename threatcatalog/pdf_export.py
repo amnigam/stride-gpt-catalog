@@ -239,6 +239,12 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         f"Data: {p.data_classification.value} &nbsp;|&nbsp; "
         f"Expected controls: {r.resolved_control_count} &nbsp;|&nbsp; "
         f"PCI in scope: {'yes' if p.handles_cardholder_data else 'no'}", ss["Meta"]))
+    if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
+        read = "; ".join(f"Diagram {i + 1}: {d}" for i, d in enumerate(r.diagrams_read)) or "none"
+        txt = escape(f"Diagrams read ({len(r.diagrams_read)}): {read}")
+        if r.diagrams_skipped:
+            txt += " &nbsp;|&nbsp; " + escape("Not read: " + "; ".join(r.diagrams_skipped))
+        el.append(Paragraph(txt, ss["Meta"]))
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
     sf = sad_facts(r)
     if sf is not None:

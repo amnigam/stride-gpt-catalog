@@ -183,11 +183,11 @@ uv run streamlit run app/streamlit_app.py
 1. Pick the engine (defaults to **OpenAI / gpt-5.2**) and paste your key, or set
    `OPENAI_API_KEY` in the environment or in `.env`. Set **API base URL** if you go through an
    org gateway or Azure, and raise **Max output tokens** for wide AI facet sets.
-2. Choose facets, write the architecture description, optionally upload an
-   architecture diagram.
+2. Choose facets, write the architecture description, optionally upload one or more
+   architecture diagrams (up to 10, e.g. context, deployment / network, data flow).
 3. Enter your name under **Reviewer** in the sidebar.
-4. **Detect controls** — with an LLM engine, one call reads the description *and* the
-   diagram; offline, keyword matching reads the description. It **pre-fills the
+4. **Detect controls** — with an LLM engine, one call reads the description *and* every
+   diagram together, citing diagram evidence as `Diagram N: <element>`; offline, keyword matching reads the description. It **pre-fills the
    declaration** with a status and an **evidence note** per control: the AI's reasoning
    plus the sentence (or diagram element) it relied on. A quoted sentence that is not
    actually in the description is flagged and its confidence capped. The AI never marks

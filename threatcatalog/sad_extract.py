@@ -119,6 +119,28 @@ def add_images(sad: ExtractedSad, files: list[tuple[str, bytes]],
             sad.images.append(img)
 
 
+def prepare_diagrams(files: list[tuple[str, bytes]], max_images: int = MAX_IMAGES
+                     ) -> tuple[list[DiagramImage], list[str]]:
+    """Validate, convert and downscale uploaded diagram files for a vision call.
+
+    Returns (diagrams in upload order, labelled by file name; reasons for any
+    file that was not used). Unlike figures pulled out of a SAD, a file the user
+    chose is never dropped silently: a tiny image is reported as skipped."""
+    images: list[DiagramImage] = []
+    skipped: list[str] = []
+    for name, blob in files:
+        if len(images) >= max_images:
+            skipped.append(f"{name}: over the {max_images}-diagram limit")
+            continue
+        before = len(skipped)
+        img = _prepare_image(blob, _guess_media_type(name), name, skipped)
+        if img is not None:
+            images.append(img)
+        elif len(skipped) == before:
+            skipped.append(f"{name}: too small to be a diagram (under {MIN_EDGE}px)")
+    return images, skipped
+
+
 # --------------------------------------------------------------------------- #
 # DOCX
 # --------------------------------------------------------------------------- #

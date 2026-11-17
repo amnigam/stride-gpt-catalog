@@ -446,3 +446,5 @@ class ThreatModelReport(BaseModel):
     candidates: list[CatalogCandidate] = Field(default_factory=list)
     compensating: list[OutOfCatalogAssessment] = Field(default_factory=list)
     sad: Optional[SadContext] = None          # set when the report was generated from a SAD
+    diagrams_read: list[str] = Field(default_factory=list)     # main page: diagrams Detect read
+    diagrams_skipped: list[str] = Field(default_factory=list)  # main page: uploads not read, and why

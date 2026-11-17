@@ -41,6 +41,7 @@ from threatcatalog.models import (AICapability, AppProfile,
                                   DataClassification, LedgerEntry,
                                   ObservedControl, PlatformFacet)
 from threatcatalog.report import render_markdown
+from threatcatalog.sad_extract import MAX_IMAGES, prepare_diagrams
 
 st.set_page_config(page_title="Catalog Threat Modeling", layout="wide")
 st.title("Catalog-driven, gap-based threat modeling")
@@ -111,17 +112,36 @@ STATUS_OPTIONS = ["unknown", "implemented", "partial", "not_present", "n_a"]
 st.subheader(f"2 · Evidence — {len(expected)} controls expected for these facets")
 description = st.text_area("Architecture description (vision text can be pasted here too)", height=120)
 
-diagram_file = st.file_uploader("Architecture diagram (optional — PNG / JPG)",
-                                type=["png", "jpg", "jpeg"])
-diagram_image = diagram_file.getvalue() if diagram_file else None
-diagram_media_type = diagram_file.type if diagram_file else "image/png"
-if diagram_file is not None:
-    st.image(diagram_file, caption="Diagram to be read by the vision extractor", width=420)
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _prepare(files: tuple[tuple[str, bytes], ...]):
+    return prepare_diagrams(list(files), MAX_IMAGES)
+
+
+diagram_files = st.file_uploader(
+    f"Architecture diagrams (optional — PNG / JPG, up to {MAX_IMAGES})",
+    type=["png", "jpg", "jpeg"], accept_multiple_files=True,
+    help="Add every view you have (context, deployment / network, data flow, agent "
+         "interaction). They are read together in one call, and each AI citation names "
+         "the diagram it came from.")
+diagrams, diagrams_skipped = _prepare(tuple((f.name, f.getvalue())
+                                            for f in diagram_files or []))
+if len(diagram_files or []) > MAX_IMAGES:
+    st.warning(f"Only the first {MAX_IMAGES} diagrams will be read. Remove the extra "
+               "files or combine views.")
+for why in diagrams_skipped:
+    st.caption(f"⚠ Not read: {why}")
+if diagrams:
+    cols = st.columns(min(len(diagrams), 4))
+    for i, img in enumerate(diagrams):
+        cols[i % len(cols)].image(img.data, caption=f"Diagram {i + 1}: {img.label}",
+                                  use_container_width=True)
 
 
 # ---- step 3a: detect controls from diagram + description, pre-fill declaration ----
 st.subheader("3 · Detect & declare")
-st.caption("Detect reads the description and — with an LLM engine — the diagram, then "
+st.caption("Detect reads the description and — with an LLM engine — every diagram, then "
            "pre-fills the declaration below. Each AI evaluation comes with its reasoning "
            "and the sentence or diagram element it relied on. The AI only reports controls "
            "it finds evidence for; it never marks one absent, so unseen controls stay "
@@ -136,24 +156,32 @@ def _keyword_detect() -> list[LedgerEntry]:
     return detect_from_text(description, expected)
 
 
-if st.button("🔍 Detect controls from diagram + description"):
+if st.button("🔍 Detect controls from diagrams + description"):
     detected: list[LedgerEntry] = []
-    if engine_choice != "Deterministic (offline)" and (description.strip() or diagram_image):
+    read: list[str] = []
+    if engine_choice != "Deterministic (offline)" and (description.strip() or diagrams):
         try:
             eng = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
                                max_tokens=max_out_tokens)
-            with st.spinner("Reading the description and diagram…"):
-                detected = eng.detect_controls(expected, description, diagram_image,
-                                               diagram_media_type)
+            n = len(diagrams)
+            with st.spinner("Reading the description" + (f" and {n} diagram(s)…" if n else "…")):
+                detected = eng.detect_controls(
+                    expected, description,
+                    diagrams=[(d.data, d.media_type, d.label) for d in diagrams])
+            read = [d.label for d in diagrams]
         except Exception as exc:                 # noqa: BLE001 — surface model/auth errors
             st.warning(f"AI detection failed ({exc}). Fell back to keyword matching on "
                        "the description.")
             detected = _keyword_detect()
     else:
         detected = _keyword_detect()
-        if diagram_image is not None:
-            st.info("Diagram uploaded but the offline engine can't read it — pick OpenAI or "
-                    "Anthropic to extract controls from the image.")
+        if diagrams:
+            st.info("Diagrams uploaded but the offline engine can't read them — pick an "
+                    "LLM engine to extract controls from the images.")
+    st.session_state["_diagrams_read"] = read
+    st.session_state["_diagrams_skipped"] = list(diagrams_skipped) + (
+        [] if read or not diagrams else
+        [f"{d.label}: not read (no LLM engine, or detection failed)" for d in diagrams])
     apply_detection(rows, detected, expected)    # never clobbers rows a reviewer touched
     st.session_state["_detected"] = {e.control_id: (e.detail.ai_source if e.detail else
                                                     e.provenance.value) for e in detected}
@@ -337,9 +365,9 @@ for line in obs_raw.splitlines():
 
 # ---- step 4: run ----
 if st.button("Run threat model", type="primary"):
-    if diagram_image is not None and not st.session_state.get("_detected_done"):
-        st.warning("You uploaded a diagram but didn't click Detect — it won't be read. "
-                   "Click Detect first to pull controls from the image.")
+    if diagrams and not st.session_state.get("_detected_done"):
+        st.warning("You uploaded diagrams but didn't click Detect — they won't be read. "
+                   "Click Detect first to pull controls from the images.")
     if attention:
         st.toast(f"Running with {len(attention)} control(s) still missing a reviewer note.")
     try:
@@ -349,10 +377,12 @@ if st.button("Run threat model", type="primary"):
         st.error(f"Could not initialize {engine_choice}: {exc}")
         st.stop()
     try:
-        # diagram already incorporated via Detect -> declaration; don't re-read it here
+        # diagrams already incorporated via Detect -> declaration; don't re-read them here
         report = pipeline.run(profile, description=description, declared=declared,
                               observed_unmatched=observed, engine=engine,
                               controls=catalog.controls)
+        report.diagrams_read = list(st.session_state.get("_diagrams_read") or [])
+        report.diagrams_skipped = list(st.session_state.get("_diagrams_skipped") or [])
     except Exception as exc:                       # noqa: BLE001
         st.error(f"Run failed with {engine_choice}: {exc}")
         st.stop()

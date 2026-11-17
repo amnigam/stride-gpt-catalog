@@ -365,6 +365,15 @@ def _sad_section_md(r: ThreatModelReport) -> list[str]:
     return out
 
 
+def diagrams_line(r: ThreatModelReport) -> str:
+    """Which architecture diagrams the Detect step read (description + diagram runs)."""
+    read = "; ".join(f"Diagram {i + 1}: {d}" for i, d in enumerate(r.diagrams_read)) or "none"
+    line = f"*Diagrams read ({len(r.diagrams_read)}):* {read}"
+    if r.diagrams_skipped:
+        line += "  \n*Not read:* " + "; ".join(r.diagrams_skipped)
+    return line
+
+
 def render_markdown(r: ThreatModelReport) -> str:
     p = r.profile
     out: list[str] = []
@@ -374,6 +383,8 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"*Data classification:* {p.data_classification.value}  ")
     out.append(f"*Resolved controls:* {r.resolved_control_count}  ")
     out.append(f"*PCI in scope:* {'yes' if p.handles_cardholder_data else 'no'}\n")
+    if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
+        out.append(diagrams_line(r) + "\n")
     if r.sad is not None:
         out.append(f"> **Automated draft from SAD.** {SAD_RULES_TEXT}\n")
 
