@@ -15,6 +15,7 @@ from collections import Counter
 import streamlit as st
 
 from threatcatalog.catalog import Catalog
+from threatcatalog.catalog.text import control_markdown
 from threatcatalog.models import Layer, Stride
 
 st.set_page_config(page_title="Control Catalog", layout="wide")
@@ -86,26 +87,7 @@ def matches(c) -> bool:
 filtered = [c for c in controls if matches(c)]
 
 
-def control_to_markdown(c) -> str:
-    out = [f"### {c.id} — {c.title}", "", f"_{c.intent}_", ""]
-    if c.guidance:
-        out.append(c.guidance)
-        out.append("")
-    out.append(f"- **Layers:** {', '.join(l.value for l in c.layers)}")
-    out.append(f"- **STRIDE:** {', '.join(s.value for s in c.stride)}")
-    out.append(f"- **Expectation:** {c.default_expectation.value}")
-    out.append(f"- **Assessment signal:** {c.assessment_signal}")
-    if c.threat_frameworks:
-        fw = "; ".join(f"{f.framework} {f.ref} (v{f.version})" for f in c.threat_frameworks)
-        out.append(f"- **Threat frameworks:** {fw}")
-    if c.pci:
-        out.append("- **PCI DSS v4.0.1:** "
-                   + ", ".join(r.requirement for r in c.pci) + "  _(illustrative — verify)_")
-    if c.detect_keywords:
-        out.append(f"- **Detection keywords:** {', '.join(c.detect_keywords)}")
-    if c.notes:
-        out.append(f"- **Notes:** {c.notes}")
-    return "\n".join(out)
+control_to_markdown = control_markdown    # shared with the threat modeling page
 
 
 def full_markdown(items) -> str:
