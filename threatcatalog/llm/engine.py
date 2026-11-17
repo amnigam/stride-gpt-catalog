@@ -150,21 +150,29 @@ class LLMArtifactEngine:
 
     def detect_controls(self, expected, description: str = "",
                         diagram_image: bytes | None = None,
-                        diagram_media_type: str = "image/png") -> list[LedgerEntry]:
-        """Read the description and/or diagram in ONE call and return an entry per
-        evidenced control, each carrying the AI's rationale and cited source.
-        Description quotes are checked against the text (`quote_verified`)."""
+                        diagram_media_type: str = "image/png",
+                        diagrams: list[tuple[bytes, str, str]] | None = None
+                        ) -> list[LedgerEntry]:
+        """Read the description and every diagram in ONE call and return an entry
+        per evidenced control, each carrying the AI's rationale and cited source.
+        Description quotes are checked against the text (`quote_verified`).
+
+        `diagrams` is a list of (image bytes, media type, label); the single
+        `diagram_image` form is kept for callers that pass one image."""
         from ..intake import quote_in_text
-        has_img = bool(diagram_image) and hasattr(self.raw, "complete_json_image")
+        imgs = [(b, mt, lab) for b, mt, lab in (diagrams or []) if b]
+        if diagram_image:
+            imgs.insert(0, (diagram_image, diagram_media_type, "architecture diagram"))
+        can_see = hasattr(self.raw, "complete_json_images") or hasattr(self.raw, "complete_json_image")
+        if not can_see:
+            imgs = []
+        has_img = bool(imgs)
         if not description.strip() and not has_img:
             return []
-        system, user = prompts.detect_prompt(expected, description, has_diagram=has_img)
-        if has_img:
-            import base64
-            b64 = base64.b64encode(diagram_image).decode()
-            data = self.raw.complete_json_image(system, user, b64, diagram_media_type)
-        else:
-            data = self.raw.complete_json(system, user)
+        system, user = prompts.detect_prompt(
+            expected, description, has_diagram=has_img,
+            diagram_labels=[lab for _b, _mt, lab in imgs] if len(imgs) > 1 else None)
+        data = self._call_with_images(system, user, [(b, mt) for b, mt, _lab in imgs])
 
         valid = {c.id for c in expected}
         entries: list[LedgerEntry] = []
