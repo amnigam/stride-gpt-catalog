@@ -1,0 +1,34 @@
+Halcyon ClaimPilot — application description
+
+Purpose
+ClaimPilot is an agentic AI claims assistant for Halcyon Mutual Insurance (a fictional UK insurer). Policyholders report motor and home claims through a web portal or a chat assistant, upload photos and documents, and receive updates and decision letters. A team of AI agents builds the claim, checks policy coverage, triages fraud, calculates the settlement and drafts customer correspondence. Claims adjusters supervise the agents in an adjuster console, approve high-value payouts and all denials, and take over complex cases. About 30,000 claims a month are expected; 420 adjusters, 300 call-centre agents and 45 team leaders use the console.
+
+Data
+All data is classified Halcyon Restricted: policyholder personal data, claim evidence, injury and medical letters, bank details for payouts, and payment card data. The application is in PCI DSS scope: online card payments use Payvanta hosted fields, but call-centre staff can key a customer's card number into the adjuster console during a phone call (MOTO); the PAN passes through API Gateway and claims-api to payments-svc, which swaps it for a Payvanta token. Only tokens and last four digits are stored. Bank account numbers are encrypted at field level; injury details sit in claim notes in clear text and are also ingested into the RAG index. All data stays in AWS eu-west-2 (London) with disaster-recovery replication to eu-west-1, and is encrypted at rest with KMS customer-managed keys.
+
+Front end, API and identity
+The customer portal and adjuster console are React single-page apps served from S3 through CloudFront, protected by AWS WAF managed rule groups and AWS Shield Advanced. A CloudFront response-headers policy sets CSP and HSTS. All API calls go through Amazon API Gateway (REST), which validates Cognito JWTs for customers and Okta JWTs for staff, validates requests against the OpenAPI schema, and applies usage-plan throttling. Staff use Okta SSO with mandatory Okta FastPass (phishing-resistant MFA). Customers use Cognito with e-mail and password; MFA is optional for customers. Access tokens last 15 minutes and refresh tokens rotate. Customers can only see claims on their own policies, but any adjuster can open any claim in their region. Payvanta webhooks are verified with an HMAC signature and timestamp.
+
+Platform
+Microservices (claims-api, payments-svc) and the agent runtime run on Amazon EKS in private subnets with a private API endpoint. Istio enforces mutual TLS between all services. Pods run as non-root with read-only root file systems under the Kubernetes "restricted" Pod Security Standard. Images come from Amazon ECR with scan-on-push but are not signed, and base images are pulled from public Docker Hub. Kubernetes NetworkPolicies are only applied in the payments namespace. Infrastructure is Terraform; workloads are deployed by Argo CD from Git. AWS service traffic uses VPC endpoints (Bedrock, S3, DynamoDB, Secrets Manager, KMS). Outbound traffic goes through AWS Network Firewall with a domain allow-list, except the web fetch tool, which uses an uninspected NAT path. Most credentials live in AWS Secrets Manager with rotation; the RepairNet API key is still a Kubernetes Secret. Admin access uses IAM Identity Center with time-bound elevation and SSM Session Manager.
+
+Agents and models
+A LangGraph orchestrator agent routes work to five specialist agents: Intake (OCR with Textract and a damage-photo classifier), Coverage (RAG over policy wordings and claim notes, plus PolicyCore lookups), Fraud Triage (ClaimShield score, a Python analysis tool that runs model-generated code inside the agent pod, and a web fetch tool), Settlement (calculates payouts and publishes payment commands), and Correspondence (drafts letters and chat replies). Each agent has a tool allow-list enforced by the orchestrator, and tool parameters are strictly typed with Pydantic. Tasks are limited to 25 steps and 10 minutes. A LaunchDarkly kill switch can stop any agent or turn autonomy off for all claims.
+
+All foundation-model calls go to Amazon Bedrock in eu-west-2 through a VPC endpoint; Bedrock does not retain or train on prompts. The damage-photo classifier was fine-tuned by Halcyon on 410,000 historical claim photos; the dataset was approved by the Data Governance Council, but faces and number plates were not removed, and model artefacts are not signed.
+
+The Settlement agent can pay out up to £5,000 on its own. Payouts above £5,000 and all claim denials wait in an adjuster approval queue, and a rules engine checks every payout against policy limits before the payment command is sent. Agents call the on-premises PolicyCore system with one shared service account that can read and write every policy; the user's identity is not passed through.
+
+Bedrock Guardrails filter prompt attacks on customer chat input and filter PII from chat responses, but are not applied to uploaded documents, RAG results or tool outputs. Content from the web fetch tool and the RepairNet MCP server is passed to the agents as-is, and the web fetch tool accepts any URL.
+
+RAG and memory
+All agents query one OpenSearch Serverless vector index that contains both policy wordings (published only by the Product team) and claim notes ingested hourly, including text written by customers. No document-level access filter is applied. Short-term agent memory is kept per claim in DynamoDB; a long-term "lessons learned" memory is shared across all claims and customers.
+
+MCP
+An in-house MCP gateway fronts two MCP servers and logs every MCP call: an in-house Client360 CRM MCP server, to which the adjuster's Okta token is forwarded and passed through to the Client360 API, and a partner-run RepairNet MCP server connected without a security review. Tool lists are loaded dynamically at start-up and are not pinned.
+
+Messaging and batch
+Amazon MSK (Kafka) carries claims.events, agent.tasks and payments.commands, with IAM authentication, per-service topic ACLs, TLS and Avro schemas in the Glue Schema Registry. payments.commands messages carry idempotency keys; agent.tasks has no de-duplication and its messages contain the full claim record. A nightly bordereaux CSV goes to the reinsurer through AWS Transfer Family SFTP without file-level encryption.
+
+Operations
+Logs, CloudTrail and GuardDuty findings go to Splunk Cloud, with OpenTelemetry trace IDs propagated end to end. Every agent tool call is written to an S3 Object Lock audit bucket. Langfuse stores full prompts and responses, including personal and medical data, without redaction. Checkmarx SAST and OWASP ZAP DAST run in the GitLab pipeline. The AI Steering Committee approved ClaimPilot as a high-risk AI use case; no AI red-team exercise has been done yet. Aurora has 35-day point-in-time restore and a global database replica; a regional fail-over test was completed in October 2026.
