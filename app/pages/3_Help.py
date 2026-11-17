@@ -72,7 +72,8 @@ with how_tab:
             "pre-fills the control declaration, with its reasoning and the sentence or "
             "diagram element it relied on.\n"
             "5. **Review the declaration.** Correct statuses, add evidence notes, tick "
-            "*Reviewed*. Your changes are recorded under your name (set it in the sidebar).\n"
+            "*Reviewed*. Use *Find control* to jump to one by ID or name (e.g. CORS). "
+            "Your changes are recorded under your name (set it in the sidebar).\n"
             "6. **Run threat model** and download the report as Markdown or PDF.")
         st.info("On this page, a control the AI finds no evidence for stays **unknown**, "
                 "not missing. Unknowns become *clarifications* in the report rather than "

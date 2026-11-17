@@ -30,13 +30,14 @@ load_dotenv()  # pick up OPENAI_API_KEY / ANTHROPIC_API_KEY from a local .env
 from threatcatalog import pipeline  # noqa: E402
 from threatcatalog.catalog import Catalog, resolve
 from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
-                                       apply_detection, apply_edit, ensure_rows,
+                                       apply_detection, apply_editor_changes,
+                                       ensure_rows,
                                        evidence_basis, export_json, import_json,
                                        needs_note, to_ledger)
 from threatcatalog.intake import detect_from_text
 from threatcatalog.llm.factory import BEDROCK, OFFLINE, default_model
 from threatcatalog.llm.factory import build_engine as _factory_build
-from threatcatalog.models import (AICapability, AppProfile, ControlStatus,
+from threatcatalog.models import (AICapability, AppProfile,
                                   DataClassification, LedgerEntry,
                                   ObservedControl, PlatformFacet)
 from threatcatalog.report import render_markdown
@@ -187,108 +188,140 @@ def _ai_label(row: DeclarationRow) -> str:
     return label
 
 
-with st.expander("Control declaration", expanded=True):
-    st.caption("Each control has an editable note, pre-filled with the AI's reasoning. "
-               "Change the status or the note to record your own assessment; the AI's "
-               "original suggestion is kept and both appear in the report. Tick "
-               "'Reviewed' to confirm an AI evaluation as-is.")
+_COLS = ["ID", "Control", "Status", "Note", "Reviewed", "AI evaluation", "AI cited",
+         "Basis", "Question", "Layer"]
 
-    # save / load — declarations survive a page refresh and carry across ARB rounds
-    c1, c2 = st.columns([1, 2])
-    c1.download_button(
-        "💾 Save declaration (JSON)",
-        export_json(rows, meta={"application": profile.name,
-                                "reviewer": st.session_state.get("reviewer") or None}),
-        file_name=f"{profile.name.replace(' ', '_')}_declaration.json",
-        mime="application/json")
-    upload = c2.file_uploader("Load a saved declaration", type=["json"], key="decl_upload",
-                              label_visibility="collapsed")
-    if upload is not None:
-        blob = upload.getvalue()
-        digest = hashlib.sha256(blob).hexdigest()
-        if digest != st.session_state.get("_decl_loaded"):
-            try:
-                loaded, meta = import_json(blob)
-            except ValueError as exc:
-                st.error(f"Could not load that file: {exc}")
+
+@st.fragment
+def _declaration_table() -> None:
+    """Edits rerun only this section, so the rest of the page stays put."""
+    with st.expander("Control declaration", expanded=True):
+        st.caption("Each control has an editable note, pre-filled with the AI's reasoning. "
+                   "Change the status or the note to record your own assessment; the AI's "
+                   "original suggestion is kept and both appear in the report. Tick "
+                   "'Reviewed' to confirm an AI evaluation as-is.")
+
+        # save / load — declarations survive a page refresh and carry across ARB rounds
+        c1, c2 = st.columns([1, 2])
+        c1.download_button(
+            "💾 Save declaration (JSON)",
+            export_json(rows, meta={"application": profile.name,
+                                    "reviewer": st.session_state.get("reviewer") or None}),
+            file_name=f"{profile.name.replace(' ', '_')}_declaration.json",
+            mime="application/json")
+        upload = c2.file_uploader("Load a saved declaration", type=["json"], key="decl_upload",
+                                  label_visibility="collapsed")
+        if upload is not None:
+            blob = upload.getvalue()
+            digest = hashlib.sha256(blob).hexdigest()
+            if digest != st.session_state.get("_decl_loaded"):
+                try:
+                    loaded, meta = import_json(blob)
+                except ValueError as exc:
+                    st.error(f"Could not load that file: {exc}")
+                else:
+                    rows.update(loaded)
+                    ensure_rows(rows, expected)
+                    st.session_state["_decl_loaded"] = digest
+                    st.session_state["_detected_done"] = True
+                    st.session_state["decl_ver"] += 1
+                    st.rerun()
             else:
-                rows.update(loaded)
-                ensure_rows(rows, expected)
-                st.session_state["_decl_loaded"] = digest
-                st.session_state["_detected_done"] = True
-                st.session_state["decl_ver"] += 1
-                st.rerun()
-        else:
-            st.caption("Declaration loaded from file.")
+                st.caption("Declaration loaded from file.")
 
-    layers = sorted({_LAYER_OF[c.id] for c in expected})
-    f1, f2 = st.columns([3, 1])
-    shown_layers = f1.multiselect("Show layers", layers, default=layers)
-    only_attention = f2.checkbox("Only rows needing a note", value=False)
+        layers = sorted({_LAYER_OF[c.id] for c in expected})
+        f1, f2, f3 = st.columns([3, 2, 1])
+        shown_layers = f1.multiselect("Show layers", layers, default=layers)
+        search = f2.text_input("Find control", placeholder="ID or name, e.g. CORS",
+                               help="Filter the table to controls whose ID or name contains "
+                                    "this text.").strip()
+        only_attention = f3.checkbox("Only rows needing a note", value=False)
 
-    visible = [c.id for c in expected if _LAYER_OF[c.id] in shown_layers
-               and (not only_attention or needs_note(rows[c.id]))]
-    cols = ["ID", "Control", "Status", "Note", "Reviewed", "AI evaluation", "AI cited",
-            "Basis", "Question", "Layer"]
-    table = pd.DataFrame([{
-        "ID": cid,
-        "Control": _CTRL[cid].title,
-        "Status": rows[cid].status.value,
-        "Note": rows[cid].evidence.note or "",
-        "Reviewed": rows[cid].evidence.reviewed,
-        "AI evaluation": _ai_label(rows[cid]),
-        "AI cited": rows[cid].evidence.ai_quote or "",
-        "Basis": BASIS_LABEL.get(evidence_basis(rows[cid].status, rows[cid].evidence), ""),
-        "Question": _CTRL[cid].assessment_signal,
-        "Layer": _LAYER_OF[cid],
-    } for cid in visible], columns=cols)
+        # The table is built from a snapshot that only changes when the view changes
+        # (filter, search, Detect, load). Rebuilding it after every edit made the grid
+        # remount and jump back to the first row on Streamlit < 1.67.
+        view = "|".join(shown_layers) + f"|{only_attention}|{search.lower()}"
+        sig = f"{st.session_state['decl_ver']}:{hashlib.sha1(view.encode()).hexdigest()[:8]}"
+        snap = st.session_state.get("_decl_snapshot")
+        if snap is None or snap[0] != sig:
+            needle = search.lower()
+            visible = [c.id for c in expected if _LAYER_OF[c.id] in shown_layers
+                       and (not only_attention or needs_note(rows[c.id]))
+                       and (not needle or needle in c.id.lower()
+                            or needle in _CTRL[c.id].title.lower())]
+            table = pd.DataFrame([{
+                "ID": cid,
+                "Control": _CTRL[cid].title,
+                "Status": rows[cid].status.value,
+                "Note": rows[cid].evidence.note or "",
+                "Reviewed": rows[cid].evidence.reviewed,
+                "AI evaluation": _ai_label(rows[cid]),
+                "AI cited": rows[cid].evidence.ai_quote or "",
+                "Basis": BASIS_LABEL.get(evidence_basis(rows[cid].status, rows[cid].evidence), ""),
+                "Question": _CTRL[cid].assessment_signal,
+                "Layer": _LAYER_OF[cid],
+            } for cid in visible], columns=_COLS)
+            snap = (sig, visible, table)
+            st.session_state["_decl_snapshot"] = snap
+        _, visible, table = snap
 
-    view_key = hashlib.sha1(("|".join(shown_layers) + str(only_attention)).encode()).hexdigest()[:8]
-    edited = st.data_editor(
-        table, key=f"decl_editor_{st.session_state['decl_ver']}_{view_key}",
-        hide_index=True, use_container_width=True, num_rows="fixed",
-        height=min(36 * (len(table) + 1) + 3, 720),
-        disabled=["ID", "Layer", "Control", "Question", "AI evaluation", "AI cited", "Basis"],
-        column_config={
-            "Control": st.column_config.TextColumn(width="medium", pinned=True),
-            "ID": st.column_config.TextColumn(pinned=True),
-            "Question": st.column_config.TextColumn(width="medium"),
-            "AI cited": st.column_config.TextColumn(
-                width="medium", help="Sentence from the description, or diagram element, "
-                                     "the AI relied on"),
-            "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True,
-                                                       width="small"),
-            "Note": st.column_config.TextColumn(
-                width="large", max_chars=2000,
-                help="Pre-filled with the AI's reasoning. Edit to add or replace with your "
-                     "own assessment."),
-            "Reviewed": st.column_config.CheckboxColumn(
-                help="Tick to confirm the AI evaluation after checking it"),
-        })
+        if search and not visible:
+            st.info(f"No control matches '{search}' in the layers shown.")
+        editor_key = f"decl_editor_{sig}"
+        st.data_editor(
+            table, key=editor_key,
+            hide_index=True, use_container_width=True, num_rows="fixed",
+            height=min(36 * (len(table) + 1) + 3, 720),
+            disabled=["ID", "Layer", "Control", "Question", "AI evaluation", "AI cited", "Basis"],
+            column_config={
+                "Control": st.column_config.TextColumn(width="medium", pinned=True),
+                "ID": st.column_config.TextColumn(pinned=True),
+                "Question": st.column_config.TextColumn(width="medium"),
+                "AI cited": st.column_config.TextColumn(
+                    width="medium", help="Sentence from the description, or diagram element, "
+                                         "the AI relied on"),
+                "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True,
+                                                           width="small"),
+                "Note": st.column_config.TextColumn(
+                    width="large", max_chars=2000,
+                    help="Pre-filled with the AI's reasoning. Edit to add or replace with your "
+                         "own assessment."),
+                "Reviewed": st.column_config.CheckboxColumn(
+                    help="Tick to confirm the AI evaluation after checking it. Changing a "
+                         "status or note also counts as reviewed."),
+                "Basis": st.column_config.TextColumn(
+                    help="What the status rests on. Refreshes when you change the filter or "
+                         "search, or click Refresh."),
+            })
 
-    changed = False
-    who = st.session_state.get("reviewer") or ""
-    for rec in edited.to_dict("records"):
-        note = rec["Note"] if isinstance(rec["Note"], str) else None
-        status = rec["Status"] if isinstance(rec["Status"], str) else "unknown"
-        changed |= apply_edit(rows[rec["ID"]], ControlStatus(status), note,
-                              bool(rec["Reviewed"]), who)
-    if changed:
-        st.rerun()                                # refresh Basis / attention columns
+        who = st.session_state.get("reviewer") or ""
+        edits = (st.session_state.get(editor_key) or {}).get("edited_rows", {})
+        apply_editor_changes(rows, visible, edits, who)
+        if edits and st.button("↻ Refresh Basis and Reviewed columns",
+                               help="Your edits are already saved. This redraws the table "
+                                    "so the derived columns catch up."):
+            st.session_state["decl_ver"] += 1
+            st.rerun(scope="fragment")
 
-    # soft prompt (never blocks the run): rows where a reviewer note is expected
-    attention = [(cid, needs_note(rows[cid])) for cid in (c.id for c in expected)]
-    attention = [(cid, why) for cid, why in attention if why]
-    if attention:
-        st.warning(f"{len(attention)} control(s) would benefit from a reviewer note — "
-                   "you can still run the threat model without them. Tick 'Only rows "
-                   "needing a note' to filter to them.")
-        with st.expander("Which ones and why"):
-            for cid, why in attention:
-                st.markdown(f"- **{cid}** {_CTRL[cid].title} — {why}")
-    if not who.strip():
-        st.caption("Tip: enter your name under *Reviewer* in the sidebar so changes are "
-                   "attributed to you in the report.")
+        # soft prompt (never blocks the run): rows where a reviewer note is expected
+        attention = [(cid, needs_note(rows[cid])) for cid in (c.id for c in expected)]
+        attention = [(cid, why) for cid, why in attention if why]
+        if attention:
+            st.warning(f"{len(attention)} control(s) would benefit from a reviewer note — "
+                       "you can still run the threat model without them. Tick 'Only rows "
+                       "needing a note' to filter to them.")
+            with st.popover("Which ones and why"):  # older Streamlit cannot nest expanders
+                for cid, why in attention:
+                    st.markdown(f"- **{cid}** {_CTRL[cid].title} — {why}")
+        if not who.strip():
+            st.caption("Tip: enter your name under *Reviewer* in the sidebar so changes are "
+                       "attributed to you in the report.")
+
+
+_declaration_table()
+
+# recomputed on the full rerun that Run triggers, so always current there
+attention = [cid for cid in (c.id for c in expected) if needs_note(rows[cid])]
 
 declared: list[LedgerEntry] = to_ledger(rows, expected)
 
