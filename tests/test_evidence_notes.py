@@ -196,11 +196,16 @@ def test_gap_carries_evidence_and_prompt_gets_note_for_findings(tiny_controls, w
 def test_report_shows_basis_and_both_notes(tiny_controls, web_llm_profile):
     md = render_markdown(_reviewed_report(tiny_controls, web_llm_profile))
     assert "| Basis |" in md and "Reviewer override" in md
-    assert "## Appendix — control evidence & reviewer notes" in md
-    assert "AI rationale: Keyword match" in md
-    assert "Reviewer note: WAF | on \\*public\\* API only" in md
-    assert "Amit · 2026-11-16 10:00:00 UTC" in md
-    assert "rest on AI suggestions that no reviewer has confirmed" in md
+    assert "## Appendix — control evidence\n" in md
+    assert "may need further analysis by AppSec" in md
+    assert "| AI rationale | Keyword match" in md
+    assert "| AI evaluation | **" in md and "AI suggested" not in md
+    assert "| Reviewer note | WAF \\| on \\*public\\* API only |" in md
+    assert "| Final status | Partial · Reviewer override |" in md
+    assert "| Reviewed by | Amit · 2026-11-16 10:00:00 UTC |" in md
+    assert "rest on AI evaluations that no reviewer has confirmed" in md
+    # findings come before passes
+    assert md.index("### 🟠 Partial") < md.index("### 🟢 Implemented")
 
 
 def test_pdf_renders_evidence_appendix(tiny_controls, web_llm_profile):

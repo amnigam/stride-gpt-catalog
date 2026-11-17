@@ -26,11 +26,12 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import (HRFlowable, Paragraph, SimpleDocTemplate, Spacer,
-                                Table, TableStyle)
+from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate,
+                                Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import _STATUS_LABEL, basis_label, evidence_records, sad_facts, summary_facts
+from .report import (_STATUS_LABEL, EVIDENCE_TITLE, basis_label, evidence_fields,
+                     evidence_groups, evidence_note, sad_facts, summary_facts)
 
 # ---- palette ----
 _NAVY = colors.HexColor("#1f2c4c")
@@ -80,6 +81,14 @@ def _styles():
     ss.add(ParagraphStyle("StatNum", parent=ss["Normal"], alignment=TA_CENTER, leading=17))
     ss.add(ParagraphStyle("StatLbl", parent=ss["Normal"], alignment=TA_CENTER, fontSize=7.5,
                           textColor=_GREY, leading=9))
+    ss.add(ParagraphStyle("GroupHdr", parent=ss["Normal"], fontSize=11, leading=14,
+                          fontName="Helvetica-Bold", spaceBefore=8, spaceAfter=6))
+    ss.add(ParagraphStyle("CardTitle", parent=ss["Normal"], fontSize=9.5, leading=12,
+                          textColor=_NAVY))
+    ss.add(ParagraphStyle("CardLabel", parent=ss["Normal"], fontSize=8, leading=11.5,
+                          textColor=_GREY, fontName="Helvetica-Bold"))
+    ss.add(ParagraphStyle("Pill", parent=ss["Normal"], fontSize=7, leading=9,
+                          alignment=TA_CENTER, textColor=colors.white))
     return ss
 
 
@@ -101,6 +110,77 @@ def _table(data, col_widths, ss):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return t
+
+
+_CARD_W = 17.0 * cm
+_LABEL_W = 3.3 * cm
+
+
+def _callout(text, ss):
+    """Amber-edged note box for the automated-assessment notice."""
+    lead, _, rest = text.partition(". ")
+    t = Table([[Paragraph(f'<font color="{_AMBER.hexval()}"><b>{escape(lead)}.</b></font> '
+                          f"{escape(rest)}", ss["Body"])]], colWidths=[_CARD_W])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fdf3e7")),
+        ("LINEBEFORE", (0, 0), (0, -1), 3, _AMBER),
+        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9), ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+    ]))
+    return t
+
+
+def _pill(text, col, ss):
+    t = Table([[Paragraph(f"<b>{escape(text).upper()}</b>", ss["Pill"])]], colWidths=[2.5 * cm])
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), col),
+                           ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                           ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4)]))
+    return t
+
+
+def _evidence_card(rec, ss):
+    """One control as a card: a header band with the control and a status pill,
+    then labelled rows. A coloured left edge carries the status at a glance."""
+    col = _STATUS_COLOR.get(rec["status_enum"], _GREY)
+    pad = 8
+    head = Table([[Paragraph(f'<b>{escape(rec["id"])}</b>&nbsp;&nbsp;{escape(rec["title"])}',
+                             ss["CardTitle"]), _pill(rec["status"], col, ss)]],
+                 colWidths=[_CARD_W - 2 * pad - 2.7 * cm, 2.7 * cm])
+    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                              ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                              ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                              ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                              ("TOPPADDING", (0, 0), (-1, -1), 0),
+                              ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
+    data = [[head, ""]]
+    for key, label, val in evidence_fields(rec):
+        v = escape(val)
+        if key == "ai":
+            v = f"<b>{v}</b>"
+        elif key == "quote":
+            v = f"<i>\u201c{v}\u201d</i>"
+            if rec["quote_unverified"]:
+                v += (f' <font color="{_RED.hexval()}">(not found verbatim in the source)'
+                      "</font>")
+        elif key == "reviewer_note":
+            v = f'<font color="{_NAVY.hexval()}">{v}</font>'
+        elif key == "reviewed_by":
+            v = f'<font color="{_GREY.hexval()}">{v}</font>'
+        data.append([Paragraph(label, ss["CardLabel"]), Paragraph(v, ss["Cell"])])
+    t = Table(data, colWidths=[_LABEL_W, _CARD_W - _LABEL_W])
+    t.setStyle(TableStyle([
+        ("SPAN", (0, 0), (1, 0)),
+        ("BACKGROUND", (0, 0), (-1, 0), _BAND),
+        ("BOX", (0, 0), (-1, -1), 0.5, _LINE),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, _LINE),
+        ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.HexColor("#e3e7ee")),
+        ("LINEBEFORE", (0, 0), (0, -1), 3.5, col),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad), ("RIGHTPADDING", (0, 0), (-1, -1), pad),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, 0), 6), ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
     ]))
     return t
 
@@ -162,8 +242,8 @@ def render_pdf(r: ThreatModelReport) -> bytes:
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
     sf = sad_facts(r)
     if sf is not None:
-        el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>Automated draft from SAD &mdash; '
-                            f'not reviewed.</b></font> {escape(sf["rules"])}', ss["Body"]))
+        el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>Automated draft from SAD.'
+                            f'</b></font> {escape(sf["rules"])}', ss["Body"]))
 
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
@@ -224,13 +304,15 @@ def render_pdf(r: ThreatModelReport) -> bytes:
 
     # ---- gap register (colour-coded status) ----
     el.append(Paragraph("Control gap register", ss["H2"]))
-    rows = [["Control", "Status", "Basis", "Frameworks", "PCI exposed"]]
+    show_basis = r.sad is None   # automated SAD run: the AI is the basis of every row
+    rows = [["Control", "Status"] + (["Basis"] if show_basis else []) + ["Frameworks", "PCI exposed"]]
     for gi in r.gap_items:
         fws = ", ".join(x.ref for x in gi.control.threat_frameworks) or "\u2014"
         pci = ", ".join(x.requirement for x in gi.pci_exposed) or "\u2014"
-        rows.append([f"{gi.control.id}  {gi.control.title}", _status_cell(gi.status, ss),
-                     basis_label(gi), fws, pci])
-    el.append(_table(rows, [5.4 * cm, 2.1 * cm, 2.8 * cm, 3.6 * cm, 2.6 * cm], ss))
+        rows.append([f"{gi.control.id}  {gi.control.title}", _status_cell(gi.status, ss)]
+                    + ([basis_label(gi)] if show_basis else []) + [fws, pci])
+    widths = ([5.4, 2.1, 2.8, 3.6, 2.6] if show_basis else [6.6, 2.1, 4.6, 3.2])
+    el.append(_table(rows, [w * cm for w in widths], ss))
 
     # ---- threats ----
     el.append(Paragraph("Threat model", ss["H2"]))
@@ -310,36 +392,18 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             el.append(Paragraph(f"Candidate: {escape(c.title)} [{strides}]", ss["Bull"],
                                 bulletText="\u2022"))
 
-    # ---- evidence appendix ----
-    recs = evidence_records(r)
-    if recs:
-        el.append(Paragraph("Appendix \u2014 control evidence &amp; reviewer notes", ss["H2"]))
-        el.append(Paragraph("What each control's status rests on. AI suggestions are kept as "
-                            "first written; a reviewer's changes are shown alongside them.",
-                            ss["Meta"]))
-        rows = [["Control", "Status / basis", "Evidence &amp; notes"]]
-        for rec in recs:
-            lines = []
-            if rec["ai_suggestion"]:
-                lines.append(f"<b>AI suggested:</b> {escape(rec['ai_suggestion'])}")
-            if rec["quote"]:
-                flag = (f' <font color="{_RED.hexval()}">(not found verbatim in the description)</font>'
-                        if rec["quote_unverified"] else "")
-                lines.append(f"<b>Cited:</b> <i>\u201c{escape(rec['quote'])}\u201d</i>{flag}")
-            if rec["ai_note"]:
-                lines.append(f"<b>AI rationale:</b> {escape(rec['ai_note'])}")
-            if rec["reviewer_note"]:
-                lines.append(f'<font color="{_NAVY.hexval()}"><b>Reviewer note:</b></font> '
-                             f"{escape(rec['reviewer_note'])}")
-            if rec["reviewed_by"]:
-                lines.append(f'<font color="{_GREY.hexval()}">Reviewed by '
-                             f"{escape(rec['reviewed_by'])}</font>")
-            rows.append([rec["control"],
-                         Paragraph(f"<b>{escape(rec['status'])}</b><br/>{escape(rec['basis'])}",
-                                   ss["Cell"]),
-                         Paragraph("<br/>".join(lines) or "\u2014", ss["Cell"])])
-        rows[0] = [Paragraph(h, ss["CellHdr"]) for h in rows[0]]
-        el.append(_table(rows, [4.6 * cm, 2.8 * cm, 9.1 * cm], ss))
+    # ---- evidence appendix: one card per control, grouped by status ----
+    groups = evidence_groups(r)
+    if groups:
+        el.append(Paragraph(escape(EVIDENCE_TITLE), ss["H2"]))
+        el.append(_callout(evidence_note(r), ss))
+        for st, recs in groups:
+            col = _STATUS_COLOR.get(st, _GREY)
+            el.append(Paragraph(f'<font color="{col.hexval()}">{escape(_STATUS_LABEL[st])}'
+                                f'</font> <font color="{_GREY.hexval()}">({len(recs)})</font>',
+                                ss["GroupHdr"]))
+            for rec in recs:
+                el.append(KeepTogether([_evidence_card(rec, ss), Spacer(1, 7)]))
 
     doc.build(el)
     return buf.getvalue()

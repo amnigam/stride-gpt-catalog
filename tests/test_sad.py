@@ -239,6 +239,11 @@ def test_end_to_end_run_on_stub(catalog):
     from threatcatalog.report import render_markdown
     md = render_markdown(report)
     assert "Assessment basis (SAD)" in md and "Automated draft from SAD" in md
+    # automated run: no review fields, no Basis column, AppSec note on top of the cards
+    assert "not reviewed" not in md and "Reviewer" not in md and "| Control | Status | Frameworks |" in md
+    assert "no person has reviewed it" in md
+    assert "| AI evaluation | **Implemented · " in md and "from SAD" in md
+    assert "### 🔴 Not present" in md
     rows = sadflow.declaration_rows(ledger)
     assert rows[first].status == ControlStatus.IMPLEMENTED
     pytest.importorskip("reportlab")
