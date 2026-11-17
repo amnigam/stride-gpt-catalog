@@ -107,6 +107,33 @@ def apply_edit(row: DeclarationRow, status: ControlStatus, note: str | None,
     return True
 
 
+def apply_editor_changes(rows: dict[str, DeclarationRow], ids: list[str],
+                         edited_rows: dict, reviewer: str | None) -> bool:
+    """Apply a table editor's cell changes to the declaration.
+
+    `ids` are the control ids in the order the table showed them, and
+    `edited_rows` maps a row position to the cells the reviewer changed
+    ({"Status": ..., "Note": ..., "Reviewed": ...}). Only the changed cells are
+    applied, so the table can keep showing the snapshot it was built from
+    (rebuilding it on every edit makes the grid jump back to the top). Safe to
+    call again with the same changes: nothing is re-stamped."""
+    changed = False
+    for pos, cells in (edited_rows or {}).items():
+        try:
+            cid = ids[int(pos)]
+        except (ValueError, IndexError):
+            continue
+        row = rows.get(cid)
+        if row is None or not isinstance(cells, dict):
+            continue
+        status = cells.get("Status", row.status.value) or ControlStatus.UNKNOWN.value
+        note = cells["Note"] if "Note" in cells else row.evidence.note
+        note = note if isinstance(note, str) else None
+        reviewed = bool(cells["Reviewed"]) if "Reviewed" in cells else row.evidence.reviewed
+        changed |= apply_edit(row, ControlStatus(status), note, reviewed, reviewer)
+    return changed
+
+
 def evidence_basis(status: ControlStatus, ev: ControlEvidence | None) -> EvidenceBasis | None:
     """What the final status rests on. None when there is nothing to say (an
     untouched unknown control with no AI suggestion)."""

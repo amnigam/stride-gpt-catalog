@@ -221,3 +221,25 @@ def test_bare_declared_entry_is_reviewer_basis(tiny_controls, web_llm_profile):
         provenance=Provenance.DECLARED, confidence=Confidence.HIGH)], controls=tiny_controls)
     gi = next(g for g in r.gap_items if g.control.id == "X-AI-1")
     assert gi.basis == EvidenceBasis.REVIEWER_ONLY
+
+
+def test_apply_editor_changes_applies_only_changed_cells_and_is_idempotent():
+    from threatcatalog.declaration import DeclarationRow, apply_editor_changes
+    rows = {"A": DeclarationRow(control_id="A"), "B": DeclarationRow(control_id="B")}
+    ids = ["A", "B"]
+    edits = {1: {"Status": "n_a"}}
+    assert apply_editor_changes(rows, ids, edits, "Amit") is True
+    assert rows["B"].status == ControlStatus.NOT_APPLICABLE
+    assert rows["B"].evidence.reviewed is True        # editing counts as reviewing
+    stamp = rows["B"].evidence.reviewed_at
+    # the editor reports the same cumulative changes on every rerun: no re-stamp
+    assert apply_editor_changes(rows, ids, edits, "Amit") is False
+    assert rows["B"].evidence.reviewed_at == stamp
+    assert rows["A"].status == ControlStatus.UNKNOWN  # untouched row stays untouched
+    # a later note edit on the same row keeps the status and the reviewed flag
+    assert apply_editor_changes(rows, ids, {1: {"Status": "n_a", "Note": "No browser UI"}},
+                                "Amit") is True
+    assert rows["B"].evidence.note == "No browser UI"
+    assert rows["B"].evidence.reviewed is True
+    # bad positions are ignored rather than raising
+    assert apply_editor_changes(rows, ids, {"7": {"Status": "n_a"}}, "Amit") is False
