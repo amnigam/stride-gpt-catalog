@@ -45,7 +45,10 @@ isn't part of the project — delete it.
 | `testapp/README.md` | PeopleDesk description + what the tool should produce for it. |
 | `testapp/peopledesk_architecture.png` / `.svg` | The test app's architecture diagram. |
 | `testapp/peopledesk_intake.json` | Ready-to-run intake for the CLI. |
+| `testapp/corvane-supplier-hub/` | Sample app A, a simple Azure web app: SAD (DOCX + PDF), an insufficient draft SAD (should stop the SAD page), description + diagram for the main page, `ANSWER_KEY.md` and `expected_results.json`. |
+| `testapp/halcyon-claimpilot/` | Sample app B, an agentic AI claims app on AWS (agents, tools, MCP, RAG, Kafka, EKS, fine-tuning, PCI): SAD (DOCX + PDF, 3 diagrams), description + diagrams, answer key. |
+| `testapp/sources/` | Sources and build scripts for the two samples (Markdown SADs, diagram code, answer keys). Rebuild with `build_diagrams.py`, `build_docs.py`, `build_answer_keys.py`. |
 | `examples/peopledesk_report.md` | A sample generated report (offline engine). |
 
 ## Tests (`tests/`)
-One file per engine area; 170 tests, all offline. Run with `pytest -q`.
+One file per engine area; 177 tests, all offline (`test_samples.py` checks the two sample apps and their answer keys). Run with `pytest -q`.

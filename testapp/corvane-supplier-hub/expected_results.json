@@ -1,0 +1,285 @@
+{
+  "application": "Corvane Supplier Hub",
+  "facets": {
+    "platforms": [
+      "web",
+      "cloud"
+    ],
+    "ai": [
+      "none"
+    ],
+    "data_classification": "Confidential",
+    "pci": false
+  },
+  "out_of_catalog": [
+    "Sanctions screening of new suppliers (EU consolidated list)",
+    "Duplicate-supplier detection on tax ID / IBAN"
+  ],
+  "controls": {
+    "IAM-SSO-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Entra ID SSO for staff; External ID for suppliers (§6.1)"
+    },
+    "IAM-LPA-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Server-side RBAC via Entra app roles; own-company scoping (§6.2)"
+    },
+    "DATA-ENC-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "TDE on SQL, SSE on Storage (§4.2)"
+    },
+    "DATA-TLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "TLS 1.2 minimum, HTTPS only (§5, §10)"
+    },
+    "LOG-AUD-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Audit table + App Insights, but not centralised in the SIEM (§11.1)"
+    },
+    "DATA-CLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Classified Corvane Confidential, tagged in the data catalogue (§4.1)"
+    },
+    "SEC-SECRETS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Key Vault + managed identity, no secrets in config (§10)"
+    },
+    "IN-VAL-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Server-side validation only on the registration form (§10)"
+    },
+    "SCA-SBOM-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Dependabot + CycloneDX SBOM per build (§10)"
+    },
+    "IAM-MFA-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "MFA enforced for staff, optional SMS OTP for suppliers (§6.1)"
+    },
+    "IAM-PAM-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "Standing Contributor rights, no PIM (§10)"
+    },
+    "IAM-S2S-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Managed identity to SQL/Storage/Key Vault; Entra-only SQL auth (§5)"
+    },
+    "DATA-MASK-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "IBAN masked in UI but stored in clear apart from TDE (§4.2)"
+    },
+    "DATA-LIFE-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "No retention/disposal rule for supplier data (audit retention only)"
+    },
+    "LOG-RED-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "LOG-CORR-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "No SIEM forwarding or security alerting until phase 2 (§11.1)"
+    },
+    "EXT-TPR-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "BankVerify assessed; SendGrid assessment not started (§9)"
+    },
+    "NET-EGRESS-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Outbound internet from App Service not restricted (§8.2; diagram label)"
+    },
+    "RES-DEP-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "BankVerify outage -> retry, approval blocked: fails closed (§7)"
+    },
+    "RES-DR-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "PITR + GRS, but restores never tested (§11.2)"
+    },
+    "IR-RESP-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "SDLC-SAST-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "CodeQL SAST, no DAST (§10)"
+    },
+    "SDLC-PIPE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "GitHub Actions with OIDC, branch protection, required review (§8.3)"
+    },
+    "VULN-PATCH-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "unknown",
+      "evidence": "PaaS: OS/runtime patching by Microsoft; app patch SLAs not stated (§8.1)"
+    },
+    "SEC-PENTEST-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "External pentest before go-live with retest (§10)"
+    },
+    "ERR-HAND-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-CRYPTO-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "partial (diagram)",
+      "evidence": "Front Door managed certificate implies certificate lifecycle; no crypto standard named"
+    },
+    "IAM-LCM-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "JML from HR + quarterly review of Approver/Admin; dormant supplier accounts disabled (§6.3)"
+    },
+    "IAM-ATO-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "E-mailed reset code only; no ATO detection (§6.1)"
+    },
+    "DATA-RES-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "West Europe + North Europe, no data leaves the EU (§4.2)"
+    },
+    "DATA-PRIV-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "No DPIA or data-subject-rights process mentioned"
+    },
+    "DATA-NONPROD-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "UAT refreshed monthly from a production copy (§8.4)"
+    },
+    "NET-MGMT-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "SCM/Kudu restricted to corporate IPs; OIDC deploys (§8.2; diagram)"
+    },
+    "WEB-WAF-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Front Door WAF, DRS 2.1, Prevention mode (§10; description omits it, diagram shows it)"
+    },
+    "WEB-CSRF-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Global antiforgery filter on POST handlers (§10)"
+    },
+    "WEB-SESS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Secure/HttpOnly cookies but 8-hour sliding expiry, SameSite not stated (§6.1)"
+    },
+    "WEB-HDR-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "HSTS not configured; no other headers stated (§10)"
+    },
+    "WEB-RATE-001": {
+      "sad_status": "partial",
+      "description_status": "partial (diagram)",
+      "evidence": "Rate limit only on /Account/Login (§10; diagram)"
+    },
+    "BIZ-TXN-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Maker-checker; bank change forces re-approval (§7)"
+    },
+    "BIZ-ABUSE-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "reCAPTCHA on registration only (§7)"
+    },
+    "WEB-DDOS-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Front Door built-in DDoS protection (§10)"
+    },
+    "FILE-ING-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Type/size limits and GUID names; malware scanning not yet enabled (§10)"
+    },
+    "WEB-SCRIPT-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "jQuery/Bootstrap from public CDN without SRI (§10)"
+    },
+    "WEB-CORS-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned (server-rendered app)"
+    },
+    "CLD-SEG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Dedicated VNet with app and private-endpoint subnets (§8.2)"
+    },
+    "CLD-KMS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Platform-managed keys only; CMK deferred (§4.2, OI-5)"
+    },
+    "CLD-IAM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Managed identity with scoped access; Entra-only SQL (§5)"
+    },
+    "CLD-SG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "NSGs on both subnets; App Service access restricted to Front Door (§8.2)"
+    },
+    "IMMUT-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Bicep IaC, but portal hotfixes allowed and no drift detection (§8.3); the description only says Bicep, so expect implemented there"
+    },
+    "CLD-CSPM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Azure Policy baseline + Defender for Cloud CSPM (§8.1; diagram)"
+    },
+    "CLD-LOG-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Azure Activity Log collection not mentioned"
+    },
+    "CLD-PE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Private endpoints for SQL, Storage, Key Vault; public access disabled (§8.2)"
+    },
+    "EDR-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned (PaaS)"
+    }
+  }
+}

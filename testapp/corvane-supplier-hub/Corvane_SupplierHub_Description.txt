@@ -1,0 +1,25 @@
+Corvane Supplier Hub — application description
+
+Purpose
+Corvane Supplier Hub is a web portal for Corvane Logistics (a fictional logistics company) that lets new suppliers register, upload their compliance documents and submit bank details for payment. Corvane procurement staff review each submission, run a bank account ownership check and approve the supplier. It replaces an e-mail and spreadsheet process. There is no AI or machine-learning functionality and no mobile app. The application does not handle payment card data; suppliers are paid by bank transfer from the ERP.
+
+Users
+About 6,500 external supplier users from roughly 4,000 companies, plus 55 Corvane staff in three roles: Procurement Analyst, Procurement Approver and Application Admin.
+
+Hosting and components
+The application runs on Microsoft Azure in the West Europe region. Traffic from the internet enters through Azure Front Door Premium, which terminates TLS and forwards requests to an Azure App Service web app (.NET 8 Razor Pages, two instances). The App Service only accepts traffic from Front Door. The web app is integrated into a dedicated VNet; Azure SQL Database (supplier records, workflow state and an audit table), an Azure Storage blob container for uploaded documents, and Azure Key Vault are all reached through private endpoints, with public network access disabled. Network security groups restrict the private endpoint subnet to traffic from the application subnet.
+
+Identity and access
+Corvane staff sign in through Corvane SSO (Entra ID, OpenID Connect); Conditional Access requires MFA for staff. Supplier users sign in with Entra External ID local accounts (e-mail and password); suppliers can opt in to SMS one-time passcodes but MFA is not enforced for them. Authorisation is role-based and enforced server-side: suppliers see only their own company record, Analysts review submissions, Approvers approve or reject, and an Approver can never approve a submission they reviewed themselves (maker-checker). Any change to bank details after approval sends the supplier back for re-approval.
+
+Data protection
+Data is classified Corvane Confidential and includes supplier contact personal data and bank details. Azure SQL uses Transparent Data Encryption and Storage uses service-side encryption, both with platform-managed keys. IBANs are masked in the user interface except for Approvers, but are stored as plain values in the database apart from TDE. All traffic uses TLS 1.2 or higher. Secrets (the SendGrid API key and the BankVerify client certificate) are stored in Key Vault and read with the App Service managed identity, which is also used to authenticate to SQL and Storage, so there are no stored passwords.
+
+Web application security
+Forms use ASP.NET Core antiforgery tokens on every POST. Session cookies are Secure and HttpOnly with an 8-hour sliding expiry. Field validation is mostly client-side; server-side validation exists only on the registration form today. Uploaded files are limited to PDF, JPG and PNG up to 10 MB and renamed on upload; malware scanning is planned but not yet switched on.
+
+Integrations
+The app calls the BankVerify API (third-party SaaS, mutual TLS) to check bank account ownership and SendGrid to send notification e-mails. If BankVerify is unavailable the check is retried and the supplier cannot be approved until it succeeds.
+
+Delivery and operations
+Infrastructure is defined in Bicep and deployed with GitHub Actions using an OIDC federated credential. CodeQL scans every pull request and Dependabot tracks vulnerable dependencies. Telemetry and business audit events (submissions, bank detail changes, approvals) go to Application Insights and an audit table in SQL; logs are not yet sent to the corporate SIEM. Azure SQL has 35-day point-in-time restore with geo-redundant backups, and the storage account is geo-redundant with soft delete; restores have not been tested yet.

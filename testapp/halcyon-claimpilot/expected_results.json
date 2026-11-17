@@ -1,0 +1,581 @@
+{
+  "application": "Halcyon ClaimPilot",
+  "facets": {
+    "platforms": [
+      "web",
+      "cloud",
+      "api",
+      "container",
+      "messaging"
+    ],
+    "ai": [
+      "agentic",
+      "mcp",
+      "generative",
+      "training"
+    ],
+    "data_classification": "Restricted",
+    "pci": true
+  },
+  "out_of_catalog": [
+    "Settlement rules engine checking payouts against policy limits before payment",
+    "LaunchDarkly global 'autonomy off' fallback to manual adjuster queue"
+  ],
+  "controls": {
+    "IAM-SSO-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Okta SSO for staff, Cognito for customers (§7.1)"
+    },
+    "IAM-LPA-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "JWT scopes per role; customers limited to own claims (§7.2)"
+    },
+    "DATA-ENC-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "KMS CMKs on all stores (§5.3)"
+    },
+    "DATA-TLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "TLS 1.2+ everywhere, Istio mTLS (§11)"
+    },
+    "LOG-AUD-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "CloudWatch -> Splunk; CloudTrail org trail (§12.1)"
+    },
+    "DATA-CLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Halcyon Restricted, tags on resources and S3 objects (§5.1)"
+    },
+    "SEC-SECRETS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Secrets Manager with rotation, except RepairNet key in a K8s Secret (§11)"
+    },
+    "IN-VAL-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "OpenAPI validation at API Gateway + Bean Validation (§11)"
+    },
+    "SCA-SBOM-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Snyk scanning, no SBOM (§11)"
+    },
+    "IAM-MFA-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "FastPass for staff; MFA optional for customers (§7.1)"
+    },
+    "IAM-PAM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "IAM Identity Center time-bound elevation, no standing admin (§7.3)"
+    },
+    "IAM-S2S-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Istio mTLS STRICT + IRSA (§8.2)"
+    },
+    "DATA-MASK-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "PAN tokenised, bank fields encrypted, medical notes in clear (§5.3)"
+    },
+    "DATA-LIFE-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "7-year claims retention; shared agent memory has no retention (§5.3, §4.6)"
+    },
+    "LOG-RED-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Langfuse stores PII/medical data unredacted (§12.1)"
+    },
+    "LOG-CORR-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "OpenTelemetry trace IDs end to end, SOC correlation rules (§12.1)"
+    },
+    "EXT-TPR-001": {
+      "sad_status": "partial",
+      "description_status": "unknown → declare not present",
+      "evidence": "Payvanta/ClaimShield/Client360 assessed; RepairNet not (§9.2)"
+    },
+    "NET-EGRESS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Network Firewall allow-list, except uninspected NAT path for web fetch (§8.2)"
+    },
+    "RES-DEP-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Bedrock throttling -> manual queue (§12.2)"
+    },
+    "RES-DR-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Global DB, RTO 4h/RPO 15m, fail-over tested Oct 2026 (§12.4)"
+    },
+    "IR-RESP-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Platform runbooks only; no AI playbook (§12.3)"
+    },
+    "SDLC-SAST-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Checkmarx SAST + ZAP DAST, critical blocks release (§11)"
+    },
+    "SDLC-PIPE-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Protected branches, two-person review, Terraform plan approval (§11)"
+    },
+    "VULN-PATCH-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Patch SLAs 7/30 days, weekly AMI rebuild (§11)"
+    },
+    "SEC-PENTEST-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Pentest excludes the agent and AI components (§11)"
+    },
+    "ERR-HAND-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-CRYPTO-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "ACM auto-renewal, Cryptography Standard CS-04 (§11)"
+    },
+    "IAM-LCM-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Workday -> Okta lifecycle, quarterly recertification (§7.1)"
+    },
+    "IAM-ATO-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Cognito adaptive auth in audit-only mode (§7.1)"
+    },
+    "DATA-RES-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "eu-west-2 with DR in eu-west-1; cross-region inference off (§5.3, §4.3)"
+    },
+    "DATA-PRIV-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "DPIA done; DSAR process misses memory, traces and RAG (§5.3)"
+    },
+    "DATA-NONPROD-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Synthetic data except 5% prod sample in model-eval env (§5.3)"
+    },
+    "NET-MGMT-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Private EKS API, SSM only, no bastion (§7.3)"
+    },
+    "WEB-WAF-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "AWS WAF managed rule groups (§11)"
+    },
+    "WEB-CSRF-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "unknown",
+      "evidence": "Bearer tokens, not cookies, so CSRF is mitigated by design (§7.1) -> confirm"
+    },
+    "WEB-SESS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "15-min access tokens, rotating refresh tokens, revocation (§7.1)"
+    },
+    "WEB-HDR-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "CloudFront response-headers policy: CSP, HSTS, etc. (§11)"
+    },
+    "WEB-RATE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "WAF rate-based rules + usage plans (§9.1)"
+    },
+    "BIZ-TXN-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Idempotency keys, rules engine before payment (§10, §4.2)"
+    },
+    "BIZ-ABUSE-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Fraud scoring, but no velocity limits per policy/payee (§11)"
+    },
+    "WEB-DDOS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Shield Advanced (§11)"
+    },
+    "FILE-ING-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Async malware scan; agents may read before the verdict (§11)"
+    },
+    "WEB-SCRIPT-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned (CSP only covers part of it)"
+    },
+    "WEB-CORS-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "CORS limited to portal/console origins (§9.1)"
+    },
+    "API-BOLA-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Customers scoped to own claims; any adjuster can open any regional claim (§7.2)"
+    },
+    "API-AUTHN-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "JWT authorizers check issuer/audience/expiry/signature (§7.2)"
+    },
+    "API-RES-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Usage plans, 10 MB payload limit, page size 100 (§9.1)"
+    },
+    "API-INV-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "External OpenAPI in catalogue; agent APIs and MCP tools not (§9.1)"
+    },
+    "API-SSRF-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Web fetch accepts any URL, no private-address block (§4.4)"
+    },
+    "API-FPA-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Payout/refund endpoints need team-leader/adjuster scope (§7.2)"
+    },
+    "API-HOOK-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "HMAC-SHA256 + 5-minute window on Payvanta webhooks (§9.1)"
+    },
+    "API-CONS-001": {
+      "sad_status": "partial",
+      "description_status": "unknown → declare not present",
+      "evidence": "ClaimShield/PolicyCore schema-validated; RepairNet and web fetch not (§4.4)"
+    },
+    "CLD-SEG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Three-tier VPC, data subnets without internet route (§8.2)"
+    },
+    "CLD-KMS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "CMK per data domain with rotation (§5.3)"
+    },
+    "CLD-IAM-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "IRSA per service with permission boundaries, no IAM users (§8.1)"
+    },
+    "CLD-SG-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Security groups per node group and data service (§8.2; Figure 3)"
+    },
+    "IMMUT-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Terraform + Argo CD drift revert, console writes blocked by SCP (§8.1)"
+    },
+    "CLD-CSPM-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Security Hub, Config CIS conformance packs, SCPs (§8.1)"
+    },
+    "CLD-LOG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "CloudTrail organisation trail with Object Lock (§8.1; overview diagram)"
+    },
+    "CLD-PE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "VPC endpoints for Bedrock, S3, DynamoDB, KMS, etc. (§8.2)"
+    },
+    "EDR-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "unknown",
+      "evidence": "GuardDuty EKS Runtime Monitoring suggests runtime detection; confirm EDR coverage (§8.3)"
+    },
+    "CTR-IMG-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "ECR scan on push; unsigned images, public base images (§8.3)"
+    },
+    "CTR-RUN-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Non-root, read-only FS, PSS restricted, seccomp (§8.3)"
+    },
+    "CTR-K8S-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Private API, access entries; NetworkPolicies only in payments (§8.2)"
+    },
+    "MSG-AUTH-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "MSK IAM auth + per-service topic ACLs (§10)"
+    },
+    "MSG-INT-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "TLS + at-rest encryption, but no signing and full PII in agent.tasks (§10)"
+    },
+    "MSG-REPLAY-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Idempotency on payments.commands; none on agent.tasks (§10)"
+    },
+    "MSG-SCHEMA-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Avro + Glue Schema Registry, BACKWARD compatibility (§10)"
+    },
+    "MSG-DLQ-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MSG-QUOTA-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MSG-MFT-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "SFTP with SSH keys; no file encryption, signing or checksum (§10)"
+    },
+    "AI-PI-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Guardrails prompt-attack filter on chat input only (§4.4)"
+    },
+    "AI-DM-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "No minimisation; agent.tasks carries the full record (expect NP or P)"
+    },
+    "AI-ENDP-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Bedrock in-region via VPC endpoint, no retention/training (§4.3)"
+    },
+    "AI-OUT-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "PII filter on customer chat, not on adjuster console (§4.4)"
+    },
+    "AI-AUTHZ-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Chat assistant scoped to session's claim IDs (§7.2)"
+    },
+    "AI-LOG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Langfuse traces linked to claim ID (§12.1)"
+    },
+    "AI-RATE-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Service quotas only; no per-user/claim budget (§4.3)"
+    },
+    "AI-VEC-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Single index, no document-level filter (§4.5)"
+    },
+    "AI-MODEL-PROV-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "AWS catalogue models; fine-tuned artefacts unsigned (§4.3)"
+    },
+    "AI-GOV-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "AI register AI-REG-0042, Steering Committee approval (§4.8)"
+    },
+    "AI-CFG-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Prompts in Git; Guardrails changed in the console (§4.3)"
+    },
+    "AI-SPL-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "AI-EVAL-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "No red teaming yet; accuracy eval only (§4.8)"
+    },
+    "AI-OUT-ACT-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Rules engine for payouts only (§4.2)"
+    },
+    "AI-SRC-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Web fetch and RepairNet content passed as-is (§4.4)"
+    },
+    "AI-RAG-ING-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Policy library curated; customer notes ingested automatically (§4.5)"
+    },
+    "AI-MON-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "No alerts on AI-specific signals (§12.2)"
+    },
+    "AI-TRANS-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "AI disclosure, human option, clause citations (§4.4)"
+    },
+    "AI-TOOL-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Per-agent allow-list enforced by the orchestrator (§4.1)"
+    },
+    "AI-TOOL-002": {
+      "sad_status": "partial",
+      "description_status": "unknown → declare not present",
+      "evidence": "ClaimShield/PolicyCore validated; web fetch/RepairNet not (§4.4)"
+    },
+    "AI-AGENCY-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Autonomous payouts up to £5,000 (§4.2)"
+    },
+    "AI-SANDBOX-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Model-written Python runs inside the agent pod, no sandbox (§4.4); may come back NP-stated"
+    },
+    "AI-PARAM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Pydantic-typed constrained parameters (§4.1)"
+    },
+    "AI-OBO-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Shared svc-claimpilot account, user identity not propagated (§4.2)"
+    },
+    "ASI-AUD-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Tool-call audit in S3 Object Lock (§12.1)"
+    },
+    "MCP-TRUST-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Client360 in-house; RepairNet connected without review (§4.7)"
+    },
+    "MCP-TOKEN-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Okta token passed through to Client360 (§4.7)"
+    },
+    "MCP-DESC-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MCP-LOG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "MCP gateway logs every call (§4.7)"
+    },
+    "MCP-PIN-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Tool lists loaded dynamically, not pinned (§4.7)"
+    },
+    "ASI-MEM-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Per-claim memory, but shared long-term 'lessons' memory (§4.6)"
+    },
+    "ASI-HITL-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Approval above £5,000 and for denials only (§4.2)"
+    },
+    "ASI-LOOP-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "25 steps / 10 minutes per task (§4.2)"
+    },
+    "ASI-MULTI-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "ASI-AUTH-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "mTLS for sync calls; agent.tasks unsigned, no agent identity (§4.2)"
+    },
+    "ASI-NHI-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "IRSA role per agent, but shared PolicyCore account (§4.2)"
+    },
+    "ASI-KILL-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "LaunchDarkly per-agent and global kill switch (§4.2)"
+    },
+    "GEN-PROV-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "GEN-SAFE-001": {
+      "sad_status": "implemented",
+      "description_status": "unknown",
+      "evidence": "Guardrails content filters + approved letter templates (§4.4)"
+    },
+    "AI-TRAIN-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Dataset approved, but faces/plates not scrubbed (§4.3)"
+    }
+  }
+}
