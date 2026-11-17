@@ -29,6 +29,7 @@ load_dotenv()  # pick up OPENAI_API_KEY / ANTHROPIC_API_KEY from a local .env
 
 from threatcatalog import pipeline  # noqa: E402
 from threatcatalog.catalog import Catalog, resolve
+from threatcatalog.catalog.text import control_markdown
 from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
                                        apply_detection, apply_editor_changes,
                                        ensure_rows,
@@ -218,6 +219,36 @@ def _ai_label(row: DeclarationRow) -> str:
 
 _COLS = ["ID", "Control", "Status", "Note", "Reviewed", "AI evaluation", "AI cited",
          "Basis", "Question", "Layer"]
+_EDITABLE = ["Status", "Note", "Reviewed"]
+_AI_COLS = ["AI evaluation", "AI cited", "Basis"]          # the AI's evidence, read-only
+_REF_COLS = ["ID", "Control", "Question", "Layer"]         # what the control is, read-only
+# translucent tints so they read in both the light and the dark theme
+_AI_TINT = "rgba(59, 130, 246, 0.12)"
+_REF_TINT = "rgba(128, 128, 128, 0.10)"
+_ROW_HEIGHT = 70                                           # room for two wrapped lines
+
+
+def _styled(table: pd.DataFrame):
+    """Shade read-only columns so the editable ones (white, pencil icon) stand out."""
+    return (table.style
+            .set_properties(subset=_AI_COLS, **{"background-color": _AI_TINT})
+            .set_properties(subset=_REF_COLS, **{"background-color": _REF_TINT}))
+
+
+def _control_details(ids: list[str]) -> None:
+    """Explain controls from the catalog: shown for the search matches, or picked."""
+    with st.container(border=True):
+        st.markdown("**ⓘ Control details**")
+        if 1 <= len(ids) <= 3 and st.session_state.get("_decl_search"):
+            for cid in ids:
+                st.markdown(control_markdown(_CTRL[cid], heading="", internals=False))
+            return
+        pick = st.selectbox("Control details", ids, index=None,
+                            format_func=lambda cid: f"{cid} — {_CTRL[cid].title}",
+                            placeholder="Pick a control to see what it covers and what to check",
+                            label_visibility="collapsed", key="_decl_detail_pick")
+        if pick:
+            st.markdown(control_markdown(_CTRL[pick], heading="", internals=False))
 
 
 @st.fragment
@@ -261,6 +292,7 @@ def _declaration_table() -> None:
         f1, f2, f3 = st.columns([3, 2, 1])
         shown_layers = f1.multiselect("Show layers", layers, default=layers)
         search = f2.text_input("Find control", placeholder="ID or name, e.g. CORS",
+                               key="_decl_search",
                                help="Filter the table to controls whose ID or name contains "
                                     "this text.").strip()
         only_attention = f3.checkbox("Only rows needing a note", value=False)
@@ -296,31 +328,48 @@ def _declaration_table() -> None:
         if search and not visible:
             st.info(f"No control matches '{search}' in the layers shown.")
         editor_key = f"decl_editor_{sig}"
+        st.caption("**White columns with a pencil icon are yours to edit** "
+                   "(Status, Note, Reviewed). "
+                   ":blue-background[Blue] columns are the AI's evidence and "
+                   ":gray-background[grey] columns describe the control; both are read-only. "
+                   "For what a control covers, see **Control details** below the table.")
         st.data_editor(
-            table, key=editor_key,
+            _styled(table), key=editor_key, column_order=_COLS,
             hide_index=True, use_container_width=True, num_rows="fixed",
-            height=min(36 * (len(table) + 1) + 3, 720),
-            disabled=["ID", "Layer", "Control", "Question", "AI evaluation", "AI cited", "Basis"],
+            row_height=_ROW_HEIGHT,
+            height=min(_ROW_HEIGHT * len(table) + 38, 760),
+            disabled=_AI_COLS + _REF_COLS,
             column_config={
-                "Control": st.column_config.TextColumn(width="medium", pinned=True),
-                "ID": st.column_config.TextColumn(pinned=True),
-                "Question": st.column_config.TextColumn(width="medium"),
-                "AI cited": st.column_config.TextColumn(
-                    width="medium", help="Sentence from the description, or diagram element, "
-                                         "the AI relied on"),
-                "Status": st.column_config.SelectboxColumn(options=STATUS_OPTIONS, required=True,
-                                                           width="small"),
+                "ID": st.column_config.TextColumn(
+                    "ID", width=120, pinned=True,
+                    help="Catalog control ID. See Control details below the table for what "
+                         "the control covers, the question to answer and its framework links."),
+                "Control": st.column_config.TextColumn(width=210, pinned=True),
+                "Status": st.column_config.SelectboxColumn(
+                    options=STATUS_OPTIONS, required=True, width=115),
                 "Note": st.column_config.TextColumn(
-                    width="large", max_chars=2000,
+                    width=330, max_chars=2000,
                     help="Pre-filled with the AI's reasoning. Edit to add or replace with your "
                          "own assessment."),
                 "Reviewed": st.column_config.CheckboxColumn(
+                    width=95,
                     help="Tick to confirm the AI evaluation after checking it. Changing a "
                          "status or note also counts as reviewed."),
+                "AI evaluation": st.column_config.TextColumn(
+                    width=170, help="The AI's suggested status · confidence · source"),
+                "AI cited": st.column_config.TextColumn(
+                    width=280, help="Sentence from the description, or diagram element, "
+                                    "the AI relied on"),
                 "Basis": st.column_config.TextColumn(
+                    width=150,
                     help="What the status rests on. Refreshes when you change the filter or "
                          "search, or click Refresh."),
+                "Question": st.column_config.TextColumn(
+                    "Assessment question", width=280,
+                    help="The question a reviewer answers to judge this control"),
+                "Layer": st.column_config.TextColumn(width=120),
             })
+        _control_details(visible)
 
         who = st.session_state.get("reviewer") or ""
         edits = (st.session_state.get(editor_key) or {}).get("edited_rows", {})
