@@ -168,7 +168,7 @@ Extras: `openai` (ChatGPT engine, the default), `llm` (Anthropic engine),
 id from your account (or set `BEDROCK_MODEL_ID`). Credentials and region come from the
 normal AWS chain (`AWS_PROFILE`, `AWS_REGION`, SSO, an instance role); the sidebar can
 override region and profile.
-Requires Python 3.10+.
+Requires Python 3.11+ (Streamlit 1.67+ for the UI).
 
 ---
 
