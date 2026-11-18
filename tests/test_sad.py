@@ -116,16 +116,32 @@ def _raw_assessment(**over):
     return raw
 
 
-def test_assessment_merges_keywords_and_biases_to_inclusion():
+def test_assessment_follows_the_model_only():
     a = sadflow.parse_assessment(_raw_assessment(), _sad("A web portal hosted on AWS using Kafka."))
     by = {f.facet: f for f in a.facets}
-    assert PlatformFacet.CLOUD in a.platforms               # AI said no, keyword says AWS
-    assert by["platform:cloud"].source == "keyword" and by["platform:cloud"].assumed
-    assert PlatformFacet.MESSAGING in a.platforms and by["platform:messaging"].assumed
+    assert a.platforms == [PlatformFacet.WEB]                # AI said no to cloud; AWS in text ignored
+    assert not by["platform:cloud"].selected and by["platform:cloud"].source == "llm"
+    assert "platform:messaging" not in by                   # not raised by the model at all
     assert by["ai:llm"].assumed                              # inferred → assumed
     assert a.data_classification == DataClassification.RESTRICTED
     assert a.handles_cardholder_data and a.sufficient
     assert a.document_version == "1.3" and a.application_name == "PayFlow"
+
+
+def test_negated_mentions_do_not_select_facets():
+    """The Corvane case: words like 'mobile app', 'SaaS', 'at rest', 'blob container'
+    and 'payment card' appear in negated or unrelated sentences."""
+    text = ("It has no mobile application. BankVerify API (third-party SaaS). Encryption at "
+            "rest. Documents go to a blob container. The application does not store, process "
+            "or transmit payment card data; PCI DSS is not applicable.")
+    raw = _raw_assessment(
+        platforms=[{"facet": f, "selected": f == "web", "basis": "stated", "reason": "r"}
+                   for f in ("web", "mobile", "multitenant", "api", "container")],
+        cardholder_data={"value": "no", "reason": "PCI DSS is not applicable"})
+    a = sadflow.parse_assessment(raw, _sad(text))
+    assert a.platforms == [PlatformFacet.WEB]
+    assert not a.handles_cardholder_data
+    assert not {f.facet: f for f in a.facets}["pci"].assumed
 
 
 def test_assessment_defaults_when_silent():
@@ -138,11 +154,12 @@ def test_assessment_defaults_when_silent():
     assert any("PCI scope not stated" in n for n in a.notes)
 
 
-def test_pci_keyword_overrides_silence():
+def test_pci_silence_is_out_of_scope_and_flagged():
     raw = _raw_assessment(cardholder_data={"value": "not_stated"})
     a = sadflow.parse_assessment(raw, _sad("We store the PAN in a vault."))
-    assert a.handles_cardholder_data
+    assert not a.handles_cardholder_data                   # keywords no longer decide
     assert {f.facet: f for f in a.facets}["pci"].assumed
+    assert any("PCI scope not stated" in n for n in a.notes)
 
 
 def test_stop_when_hard_minimum_missing_or_not_a_sad():
