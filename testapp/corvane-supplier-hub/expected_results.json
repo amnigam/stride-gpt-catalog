@@ -3,7 +3,8 @@
   "facets": {
     "platforms": [
       "web",
-      "cloud"
+      "cloud",
+      "messaging"
     ],
     "ai": [
       "none"
@@ -280,6 +281,41 @@
       "sad_status": "not present (not stated)",
       "description_status": "unknown",
       "evidence": "Not mentioned (PaaS)"
+    },
+    "MSG-AUTH-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Queue technology and its access control not described"
+    },
+    "MSG-INT-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MSG-REPLAY-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Idempotency of retried validation requests not stated"
+    },
+    "MSG-SCHEMA-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MSG-DLQ-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Retries capped at every 15 minutes for 24 hours; no dead-letter handling stated (§7)"
+    },
+    "MSG-QUOTA-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "MSG-MFT-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "No batch or file transfer integrations described"
     }
   }
 }

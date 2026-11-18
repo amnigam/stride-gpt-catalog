@@ -14,11 +14,11 @@ Expected results when this sample is run through the threat modeling utility. LL
 
 | Facet | Expected |
 |---|---|
-| Platforms | web, cloud |
+| Platforms | web, cloud, messaging |
 | AI capability | none |
 | Data classification | Confidential |
 | Cardholder data (PCI) | No — PCI out of scope (stated explicitly) |
-| Expected control count | 53 |
+| Expected control count | 60 |
 
 ## Insufficient-SAD test
 
@@ -30,16 +30,17 @@ Upload `Corvane_SupplierHub_SAD_v0.1_DRAFT_incomplete.docx`. It has a purpose bu
 - Explicit absences (no PIM, no SIEM, prod data in UAT, no SRI, HSTS not configured) should come back *not present* with a quote, not just silence.
 - PaaS patching and Front Door managed certificates should be *partial (inferred)* with a 'confirm' note.
 - PCI should be out of scope because the SAD says so explicitly.
+- Messaging is in scope only through the BankVerify retry queue (§7), which names no broker. Expect the messaging facet to be selected (inferred) and most MSG-* controls to come back *not present*; MSG-DLQ-001 is *partial* (retries are capped, no dead-letter queue stated).
 
 ## Expected status mix on the SAD page
 
 | Status | Controls |
 |---|---|
 | implemented | 23 |
-| partial | 14 |
+| partial | 15 |
 | partial (inferred, AI note) | 2 |
 | not present (stated) | 6 |
-| not present (not stated) | 8 |
+| not present (not stated) | 14 |
 
 Out-of-catalog controls the SAD describes (should appear as catalog candidates): Sanctions screening of new suppliers (EU consolidated list); Duplicate-supplier detection on tax ID / IBAN.
 
@@ -102,3 +103,10 @@ Description-page column: what Detect should pre-fill from the description text a
 | CLD-LOG-001 | Cloud control-plane audit logging | platform.cloud | not present (not stated) | unknown | Azure Activity Log collection not mentioned |
 | CLD-PE-001 | Private endpoints for managed services | platform.cloud | implemented | implemented | Private endpoints for SQL, Storage, Key Vault; public access disabled (§8.2) |
 | EDR-001 | Endpoint detection & response (EDR) telemetry | platform.onprem/platform.cloud | not present (not stated) | unknown | Not mentioned (PaaS) |
+| MSG-AUTH-001 | Broker authentication and topic access control | platform.messaging | not present (not stated) | unknown | Queue technology and its access control not described |
+| MSG-INT-001 | Message integrity and payload confidentiality | platform.messaging | not present (not stated) | unknown | Not mentioned |
+| MSG-REPLAY-001 | Replay, duplicate and ordering protection | platform.messaging | not present (not stated) | unknown | Idempotency of retried validation requests not stated |
+| MSG-SCHEMA-001 | Schema validation and registry governance | platform.messaging | not present (not stated) | unknown | Not mentioned |
+| MSG-DLQ-001 | Poison-message handling and dead-letter security | platform.messaging | partial | partial | Retries capped at every 15 minutes for 24 hours; no dead-letter handling stated (§7) |
+| MSG-QUOTA-001 | Broker quotas and backpressure | platform.messaging | not present (not stated) | unknown | Not mentioned |
+| MSG-MFT-001 | Secure file transfer and batch integrations | platform.messaging | not present (not stated) | unknown | No batch or file transfer integrations described |

@@ -14,8 +14,11 @@ Description column (main page, description + diagram):
 
 CORVANE = {
     "name": "Corvane Supplier Hub",
-    "facets": {"platforms": ["web", "cloud"], "ai": ["none"], "data_classification": "Confidential",
-               "pci": False},
+    # messaging: the BankVerify retry queue (§7) makes it in scope. Kept on the reviewer's
+    # decision (2026-11-18) after a live run selected it; the SAD names no broker, so most
+    # messaging controls are not present by the SAD-page rule.
+    "facets": {"platforms": ["web", "cloud", "messaging"], "ai": ["none"],
+               "data_classification": "Confidential", "pci": False},
     "out_of_catalog": ["Sanctions screening of new suppliers (EU consolidated list)",
                        "Duplicate-supplier detection on tax ID / IBAN"],
     "controls": {
@@ -75,6 +78,14 @@ CORVANE = {
         "CLD-LOG-001": ("NP", "-", "Azure Activity Log collection not mentioned"),
         "CLD-PE-001": ("I", "T", "Private endpoints for SQL, Storage, Key Vault; public access disabled (§8.2)"),
         "EDR-001": ("NP", "-", "Not mentioned (PaaS)"),
+        # messaging (BankVerify validation retry queue, §7; no broker or queue technology named)
+        "MSG-AUTH-001": ("NP", "-", "Queue technology and its access control not described"),
+        "MSG-INT-001": ("NP", "-", "Not mentioned"),
+        "MSG-REPLAY-001": ("NP", "-", "Idempotency of retried validation requests not stated"),
+        "MSG-SCHEMA-001": ("NP", "-", "Not mentioned"),
+        "MSG-DLQ-001": ("P", "T", "Retries capped at every 15 minutes for 24 hours; no dead-letter handling stated (§7)"),
+        "MSG-QUOTA-001": ("NP", "-", "Not mentioned"),
+        "MSG-MFT-001": ("NP", "-", "No batch or file transfer integrations described"),
     },
 }
 
