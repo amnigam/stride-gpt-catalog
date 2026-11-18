@@ -17,6 +17,8 @@ All logic lives in `threatcatalog.sad` / `threatcatalog.sad_extract`.
 
 from __future__ import annotations
 
+import hashlib
+
 import pandas as pd
 import streamlit as st
 
@@ -133,7 +135,12 @@ if doc.images:
 st.warning(f"**Confidentiality:** the full text of `{up.name}` and its diagrams will be sent to "
            f"**{choice}** ({endpoint}). Use your organisation's approved endpoint for "
            "Confidential or Restricted documents.")
-consent = st.checkbox("I confirm this document may be sent to this provider", key="sad_consent")
+# keyed to the upload: a new file (or new extra diagrams) gets a fresh, unticked box.
+# One shared key was cleared above on every new upload, which left the box drawn
+# ticked while the server saw it unticked and kept the Check button disabled.
+_upload_id = hashlib.sha256(repr(key).encode()).hexdigest()[:16]
+consent = st.checkbox("I confirm this document may be sent to this provider",
+                      key=f"sad_consent_{_upload_id}")
 
 # ------------------------------------------------------------------ check ----
 st.subheader("2 · Check the SAD")
@@ -274,10 +281,11 @@ except Exception as exc:  # noqa: BLE001
     d2.caption(f"PDF export needs reportlab — `pip install reportlab`. ({exc})")
 d3.download_button("⬇ Declaration (JSON)",
                    export_json(sadflow.declaration_rows(ss["sad_ledger"]),
-                               meta={"application": report.profile.name, "source": "sad",
-                                     "sad_file": doc.filename, "sad_sha256": doc.sha256}),
+                               meta=sadflow.declaration_meta(report, choice, model_id)),
                    file_name=f"{rname}_declaration.json", mime="application/json",
-                   help="Load this on the main review page to confirm or correct each control.")
+                   help="Load this on the main review page to confirm or correct each control. "
+                        "It also carries the confirmed profile and the SAD record, "
+                        "so the review page fills itself in.")
 d4.download_button("⬇ SAD feedback (Markdown)", feedback, file_name=f"{fname}_SAD_feedback.md",
                    mime="text/markdown")
 st.markdown(md)

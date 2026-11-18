@@ -15,6 +15,8 @@ the declaration form, kept out of the Streamlit file so it is testable:
   missing. It never blocks a run.
 * `to_ledger` turns rows into `LedgerEntry`s for the pipeline.
 * `export_json` / `import_json` persist a declaration between sessions and ARB rounds.
+* `SadHandoff` / `profile_differences` carry a SAD run's confirmed profile and
+  SAD record onto the review page, and say how the review page's profile differs.
 """
 
 from __future__ import annotations
@@ -24,8 +26,9 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
-from .models import (Confidence, Control, ControlEvidence, ControlStatus,
-                     EvidenceBasis, LedgerEntry, Provenance)
+from .models import (AICapability, AppProfile, Confidence, Control, ControlEvidence,
+                     ControlStatus, EvidenceBasis, LedgerEntry, ObservedControl, Provenance,
+                     SadContext)
 
 _WEAK = (ControlStatus.PARTIAL, ControlStatus.NOT_PRESENT)
 _EXPORT_VERSION = 1
@@ -215,3 +218,71 @@ def import_json(text: str | bytes) -> tuple[dict[str, DeclarationRow], dict]:
         rows[row.control_id] = row
     meta = {k: v for k, v in data.items() if k not in ("rows",)}
     return rows, meta
+
+
+# --------------------------------------------------------------------------- #
+# SAD page -> review page
+# --------------------------------------------------------------------------- #
+class SadHandoff(BaseModel):
+    """What a SAD declaration export carries besides its rows."""
+    profile: AppProfile
+    sad: SadContext | None = None
+    provider: str = ""
+    model_id: str = ""
+
+    @property
+    def other_controls(self) -> list[ObservedControl]:
+        return list(self.sad.other_controls) if self.sad else []
+
+
+def sad_handoff(meta: dict) -> SadHandoff | None:
+    """The handoff in a loaded declaration's meta, or None for an ordinary
+    declaration (or an older SAD export that has no profile)."""
+    if not isinstance(meta, dict) or not isinstance(meta.get("profile"), dict):
+        return None
+    try:
+        profile = AppProfile.model_validate(meta["profile"])
+        sad = SadContext.model_validate(meta["sad"]) if isinstance(meta.get("sad"), dict) else None
+    except ValueError:
+        return None
+    eng = meta.get("engine") if isinstance(meta.get("engine"), dict) else {}
+    return SadHandoff(profile=profile, sad=sad, provider=str(eng.get("provider") or ""),
+                      model_id=str(eng.get("model_id") or ""))
+
+
+def profile_differences(confirmed: AppProfile, current: AppProfile) -> list[str]:
+    """Plain-language differences between the profile confirmed on the SAD page and
+    the one now set on the review page. Empty when they match."""
+    out: list[str] = []
+
+    def facet_diff(label: str, a: list, b: list) -> None:
+        a_, b_ = {x.value for x in a}, {x.value for x in b}
+        a_.discard(AICapability.NONE.value)
+        b_.discard(AICapability.NONE.value)
+        if a_ - b_:
+            out.append(f"{label} removed: {', '.join(sorted(a_ - b_))}")
+        if b_ - a_:
+            out.append(f"{label} added: {', '.join(sorted(b_ - a_))}")
+
+    facet_diff("Platform", confirmed.platforms, current.platforms)
+    facet_diff("AI capability", confirmed.ai_capabilities, current.ai_capabilities)
+    if confirmed.data_classification != current.data_classification:
+        out.append(f"Data classification {confirmed.data_classification.value} → "
+                   f"{current.data_classification.value}")
+    if confirmed.handles_cardholder_data != current.handles_cardholder_data:
+        out.append("PCI " + ("added" if current.handles_cardholder_data else "removed"))
+    return out
+
+
+def reviewed_sad_context(h: SadHandoff, current: AppProfile, reviewer: str | None) -> SadContext | None:
+    """The SAD record for a report run from the review page: marked reviewed, with
+    any profile change made there noted under the limitations."""
+    if h.sad is None:
+        return None
+    who = (reviewer or "").strip() or None
+    notes = list(h.sad.notes)
+    diffs = profile_differences(h.profile, current)
+    if diffs:
+        notes.append(f"Profile changed on the review page by {who or 'the reviewer'} after "
+                     f"the SAD run: " + "; ".join(diffs) + ".")
+    return h.sad.model_copy(update={"reviewed": True, "reviewed_by": who, "notes": notes})

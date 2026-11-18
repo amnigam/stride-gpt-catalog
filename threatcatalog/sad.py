@@ -300,6 +300,19 @@ def build_sad_ledger(expected: list[Control], records: list[dict],
     return out
 
 
+def declaration_meta(report, provider: str = "", model_id: str = "") -> dict:
+    """Everything the review page needs besides the rows, saved in the declaration
+    JSON: the confirmed profile (pre-fills the review page), the engine, and the SAD
+    record (completeness, facet decisions, other controls) so the reviewed report
+    keeps its SAD section."""
+    sc: SadContext = report.sad
+    return {"application": report.profile.name, "source": "sad",
+            "sad_file": sc.source_file if sc else None, "sad_sha256": sc.sha256 if sc else None,
+            "profile": report.profile.model_dump(mode="json"),
+            "engine": {"provider": provider, "model_id": model_id},
+            "sad": sc.model_dump(mode="json") if sc else None}
+
+
 def declaration_rows(ledger: list[LedgerEntry]) -> dict[str, DeclarationRow]:
     """Ledger → rows the review page can load (Save/Load declaration JSON)."""
     return {e.control_id: DeclarationRow(control_id=e.control_id, status=e.status,
@@ -314,8 +327,8 @@ MAX_OTHER_CONTROLS = 10
 
 
 def build_context(sad: ExtractedSad, a: SadAssessment, engine_label: str,
-                  confirmed_by: str | None = None, facets: list[FacetReason] | None = None
-                  ) -> SadContext:
+                  confirmed_by: str | None = None, facets: list[FacetReason] | None = None,
+                  other_controls: list[ObservedControl] | None = None) -> SadContext:
     notes = list(a.notes) + list(sad.notes)
     return SadContext(
         source_file=sad.filename, sha256=sad.sha256, pages=sad.pages, words=sad.words,
@@ -323,7 +336,7 @@ def build_context(sad: ExtractedSad, a: SadAssessment, engine_label: str,
         engine=engine_label, document_title=a.document_title,
         document_version=a.document_version, completeness=a.completeness,
         facets=facets if facets is not None else a.facets, profile_confirmed_by=confirmed_by,
-        notes=notes,
+        notes=notes, other_controls=list(other_controls or []),
         generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat())
 
 
@@ -349,7 +362,7 @@ def run(sad: ExtractedSad, assessment: SadAssessment, profile: AppProfile, engin
     say("Generating threats, recommendations, mitigations and DREAD scores…")
     report = pipeline.run(profile, description="", declared=ledger, observed_unmatched=observed,
                           engine=engine, controls=controls)
-    report.sad = build_context(sad, assessment, engine_label, confirmed_by, facets)
+    report.sad = build_context(sad, assessment, engine_label, confirmed_by, facets, observed)
     return report, ledger
 
 
