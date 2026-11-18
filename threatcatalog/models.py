@@ -217,6 +217,10 @@ class ControlEvidence(BaseModel):
     ai_note: Optional[str] = None            # the AI's rationale, as first written
     ai_quote: Optional[str] = None           # verbatim excerpt / diagram element cited
     quote_verified: Optional[bool] = None    # description quotes are checked against the text
+    # second-opinion check (same model): does the cited quote actually back ai_status?
+    # False flags the row for the reviewer; it never changes the status
+    quote_supports: Optional[bool] = None
+    support_note: Optional[str] = None       # why the check says the quote falls short
     note: Optional[str] = None               # current content of the editable box
     reviewed: bool = False
     reviewer: Optional[str] = None
@@ -417,6 +421,7 @@ class SadContext(BaseModel):
     source_file: str
     sha256: str
     pages: Optional[int] = None
+    pages_estimated: bool = False
     words: int = 0
     diagrams_read: list[str] = Field(default_factory=list)
     diagrams_skipped: list[str] = Field(default_factory=list)

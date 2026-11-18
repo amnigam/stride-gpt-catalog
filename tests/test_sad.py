@@ -60,6 +60,22 @@ def test_docx_extraction_keeps_headings_tables_and_diagrams():
     assert len(sad.images) == 1 and sad.images[0].label == "Figure after '3.1 Context'"
     assert "[Diagram 1:" in sad.text
     assert len(sad.sha256) == 64 and sad.has_diagram
+    assert sad.pages >= 1 and sad.pages_estimated          # python-docx leaves a stale app.xml
+
+
+def test_docx_page_count_uses_word_figure_only_when_current():
+    import zipfile
+    from threatcatalog.sad_extract import docx_page_count
+
+    def with_app(pages, words):
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, "w") as z:
+            z.writestr("docProps/app.xml", f"<Properties><Pages>{pages}</Pages>"
+                                           f"<Words>{words}</Words></Properties>")
+        return b.getvalue()
+    assert docx_page_count(with_app(9, 2500), 2568, 1) == (9, False)   # Word's figure is current
+    assert docx_page_count(with_app(1, 0), 2568, 1) == (8, True)       # stale: estimate
+    assert docx_page_count(b"not a zip", 100, 0) == (1, True)
 
 
 def test_pdf_vector_diagram_page_is_rendered():
@@ -228,6 +244,8 @@ def _stub_sad_run(catalog):
                        "source": "text", "quote": "All traffic uses TLS 1.2 everywhere.",
                        "rationale": "stated"}],
          "other_controls": [{"name": "Quarterly pen test", "description": "External test"}]},
+        {"checks": [{"control_id": first, "supports": "no",
+                     "reason": "Covers transport only"}]},                    # quote check
         {"relevant": True, "stride": ["Tampering"], "compensating": False,
          "rationale": "useful"},                                             # out-of-catalog
         [{"id": "T1", "stride": "Spoofing", "title": "Session hijack",
@@ -250,7 +268,10 @@ def test_end_to_end_run_on_stub(catalog):
     sad, profile, expected, report, ledger = _stub_sad_run(catalog)
     first = expected[0].id
     status = {gi.control.id: gi for gi in report.gap_items}
-    assert status[first].status == ControlStatus.IMPLEMENTED
+    assert status[first].status == ControlStatus.IMPLEMENTED       # the check never changes it
+    assert status[first].evidence.quote_supports is False
+    assert status[first].evidence.support_note == "Covers transport only"
+    assert any("Quote check: 1 of 1" in n for n in report.sad.notes)
     others = [gi for cid, gi in status.items() if cid != first]
     assert all(gi.status == ControlStatus.NOT_PRESENT for gi in others)
     assert all(gi.basis == EvidenceBasis.AI_UNREVIEWED for gi in report.gap_items)
@@ -267,6 +288,7 @@ def test_end_to_end_run_on_stub(catalog):
     assert "no person has reviewed it" in md
     assert "| AI evaluation | **Implemented · " in md and "from SAD" in md
     assert "### 🔴 Not present" in md
+    assert "quote check: Covers transport only" in md
     rows = sadflow.declaration_rows(ledger)
     assert rows[first].status == ControlStatus.IMPLEMENTED
     pytest.importorskip("reportlab")
@@ -412,3 +434,34 @@ def test_anthropic_provider_streams(monkeypatch):
     llm = AnthropicRawLLM(api_key="k", max_tokens=64000)
     assert llm.complete_json("s", "u") == {"ok": True}
     assert seen["max_tokens"] == 64000
+
+
+def test_quote_check_failure_does_not_fail_the_run(catalog):
+    profile = AppProfile(name="P", platforms=[PlatformFacet.WEB],
+                         ai_capabilities=[AICapability.NONE],
+                         data_classification=DataClassification.CONFIDENTIAL)
+    expected = resolve(profile, catalog.controls)
+    ledger = sadflow.build_sad_ledger(expected, [{"control_id": expected[0].id, "status": "implemented",
+                                                  "basis": "stated", "source": "text",
+                                                  "quote": "TLS 1.2 everywhere.", "rationale": "r"}],
+                                      "TLS 1.2 everywhere.")
+
+    class Boom:
+        def check_quotes(self, items):
+            raise RuntimeError("throttled")
+    note = sadflow.apply_quote_check(Boom(), ledger, expected)
+    assert "could not run" in note
+    assert ledger[0].detail.quote_supports is None and ledger[0].status == ControlStatus.IMPLEMENTED
+    # not-stated rows carry no quote, so they are never sent
+    assert [i["control_id"] for i in sadflow.quote_check_items(ledger, expected)] == [expected[0].id]
+
+
+def test_unsupported_quote_asks_for_a_reviewer_note():
+    from threatcatalog.declaration import DeclarationRow, needs_note
+    from threatcatalog.models import ControlEvidence
+    row = DeclarationRow(control_id="X", status=ControlStatus.IMPLEMENTED,
+                         evidence=ControlEvidence(ai_status=ControlStatus.IMPLEMENTED,
+                                                  ai_note="n", note="n", quote_supports=False))
+    assert "does not clearly support" in needs_note(row)
+    row.evidence.reviewed = True
+    assert needs_note(row) is None

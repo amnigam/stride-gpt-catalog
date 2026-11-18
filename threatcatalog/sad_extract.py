@@ -58,6 +58,7 @@ class ExtractedSad:
     text: str
     images: list[DiagramImage] = field(default_factory=list)
     pages: int | None = None
+    pages_estimated: bool = False                      # DOCX: no fixed pages, so estimated
     skipped: list[str] = field(default_factory=list)   # figures we could not use, and why
     notes: list[str] = field(default_factory=list)     # e.g. "no text layer"
     has_text_diagram: bool = False                     # mermaid / PlantUML in the text
@@ -210,7 +211,33 @@ def _extract_docx(filename: str, data: bytes, max_images: int) -> ExtractedSad:
             lines.append(_table_markdown(Table(child, document)))
             take_images(child)
     out.text = "\n\n".join(x for x in lines if x).strip()
+    out.pages, out.pages_estimated = docx_page_count(data, out.words, len(out.images))
     return out
+
+
+# Calibrated on the sample SADs (Word -> PDF): about 400 words a page, a figure
+# takes about three quarters of a page.
+_WORDS_PER_PAGE = 400
+_PAGES_PER_FIGURE = 0.75
+
+
+def docx_page_count(data: bytes, words: int, figures: int) -> tuple[int, bool]:
+    """(pages, estimated). A DOCX has no fixed pages: Word records its last layout
+    in docProps/app.xml, but generators and templates often leave a stale value
+    there. Use it only when that file's word count matches the document; otherwise
+    estimate from words and figures."""
+    import math
+    import zipfile
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            app = z.read("docProps/app.xml").decode("utf-8", "replace")
+        pages = int(re.search(r"<Pages>(\d+)</Pages>", app).group(1))
+        app_words = int(re.search(r"<Words>(\d+)</Words>", app).group(1))
+        if pages > 0 and words and abs(app_words - words) <= 0.25 * words:
+            return pages, False
+    except (KeyError, AttributeError, ValueError, zipfile.BadZipFile):
+        pass
+    return max(1, math.ceil(words / _WORDS_PER_PAGE + figures * _PAGES_PER_FIGURE)), True
 
 
 def _table_markdown(table) -> str:
