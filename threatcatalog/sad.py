@@ -300,6 +300,54 @@ def build_sad_ledger(expected: list[Control], records: list[dict],
     return out
 
 
+UNSUPPORTED_QUOTE_FLAG = "The cited quote does not clearly support this status"
+
+
+def quote_check_items(ledger: list[LedgerEntry], expected: list[Control]) -> list[dict]:
+    """Rows the quote check looks at: every AI status that rests on a text quote.
+    Diagram citations are not re-checked (the check is text only, to stay cheap), and
+    rows with no quote (not stated in the SAD) have nothing to check."""
+    by_id = {c.id: c for c in expected}
+    items = []
+    for e in ledger:
+        ev = e.detail
+        if ev is None or not ev.ai_quote or ev.ai_source != "description":
+            continue
+        c = by_id.get(e.control_id)
+        items.append({"control_id": e.control_id, "title": c.title if c else e.control_id,
+                      "intent": (c.intent if c else "") or "", "status": e.status.value,
+                      "quote": ev.ai_quote, "rationale": ev.ai_note or ""})
+    return items
+
+
+def apply_quote_check(engine, ledger: list[LedgerEntry], expected: list[Control]) -> str | None:
+    """Ask the same model, in one call, whether each cited quote backs its status.
+    Flags rows for the reviewer (`quote_supports=False`); never changes a status.
+    Returns a note for the report's limitations, or None when nothing to say."""
+    items = quote_check_items(ledger, expected)
+    if not items:
+        return None
+    try:
+        verdicts = engine.check_quotes(items)
+    except Exception as exc:  # noqa: BLE001 — a failed check must not fail the run
+        return f"The quote check could not run ({type(exc).__name__}); cited quotes were not checked."
+    flagged = 0
+    for e in ledger:
+        v = verdicts.get(e.control_id)
+        if v is None or e.detail is None:
+            continue
+        e.detail.quote_supports, reason = v[0], (v[1] or "").strip()
+        if not v[0]:
+            flagged += 1
+            e.detail.support_note = reason or UNSUPPORTED_QUOTE_FLAG
+    unchecked = len(items) - len(verdicts)
+    note = (f"Quote check: {flagged} of {len(verdicts)} cited quote(s) do not clearly support "
+            f"the status given; these are flagged for the reviewer in the evidence appendix.")
+    if unchecked:
+        note += f" {unchecked} quote(s) were not checked."
+    return note
+
+
 def declaration_meta(report, provider: str = "", model_id: str = "") -> dict:
     """Everything the review page needs besides the rows, saved in the declaration
     JSON: the confirmed profile (pre-fills the review page), the engine, and the SAD
@@ -331,7 +379,8 @@ def build_context(sad: ExtractedSad, a: SadAssessment, engine_label: str,
                   other_controls: list[ObservedControl] | None = None) -> SadContext:
     notes = list(a.notes) + list(sad.notes)
     return SadContext(
-        source_file=sad.filename, sha256=sad.sha256, pages=sad.pages, words=sad.words,
+        source_file=sad.filename, sha256=sad.sha256, pages=sad.pages,
+        pages_estimated=sad.pages_estimated, words=sad.words,
         diagrams_read=[i.label for i in sad.images], diagrams_skipped=list(sad.skipped),
         engine=engine_label, document_title=a.document_title,
         document_version=a.document_version, completeness=a.completeness,
@@ -357,12 +406,18 @@ def run(sad: ExtractedSad, assessment: SadAssessment, profile: AppProfile, engin
         image_labels=[i.label for i in sad.images])
     verify = not any("no text layer" in n for n in sad.notes)
     ledger = build_sad_ledger(expected, records, sad.text, verify_quotes=verify)
+    check_note = None
+    if hasattr(engine, "check_quotes"):
+        say("Checking that each cited quote supports its control's status…")
+        check_note = apply_quote_check(engine, ledger, expected)
     observed = [ObservedControl(name=o["name"], description=o.get("description", ""))
                 for o in others[:MAX_OTHER_CONTROLS]]
     say("Generating threats, recommendations, mitigations and DREAD scores…")
     report = pipeline.run(profile, description="", declared=ledger, observed_unmatched=observed,
                           engine=engine, controls=controls)
     report.sad = build_context(sad, assessment, engine_label, confirmed_by, facets, observed)
+    if check_note:
+        report.sad.notes.append(check_note)
     return report, ledger
 
 

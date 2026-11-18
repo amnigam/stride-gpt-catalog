@@ -340,6 +340,26 @@ class LLMArtifactEngine:
         return out
 
     # ---- out-of-catalog relevance judgement ----
+    def check_quotes(self, items: list[dict]) -> dict[str, tuple[bool, str]]:
+        """One call: for each {control_id, title, intent, status, quote, rationale},
+        does the quote back the status? Returns control_id -> (supports, reason).
+        Items the model skips are left out (unchecked)."""
+        if not items:
+            return {}
+        system, user = prompts.quote_check_prompt(items)
+        data = self.raw.complete_json(system, user)
+        raw = data.get("checks") if isinstance(data, dict) else data
+        out: dict[str, tuple[bool, str]] = {}
+        wanted = {i["control_id"] for i in items}
+        for d in raw if isinstance(raw, list) else []:
+            if not isinstance(d, dict):
+                continue
+            cid = _as_opt_str(d.get("control_id"))
+            verdict = (_as_str(d.get("supports")) or "").strip().lower()
+            if cid in wanted and verdict in ("yes", "no", "true", "false"):
+                out[cid] = (verdict in ("yes", "true"), _as_str(d.get("reason")))
+        return out
+
     def judge_out_of_catalog(self, observed: ObservedControl, profile) -> OutOfCatalogAssessment:
         system, user = prompts.ooc_prompt(observed, profile)
         data = self.raw.complete_json(system, user)

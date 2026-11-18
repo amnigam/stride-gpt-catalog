@@ -165,6 +165,9 @@ def _evidence_card(rec, ss):
             if rec["quote_unverified"]:
                 v += (f' <font color="{_RED.hexval()}">(not found verbatim in the source)'
                       "</font>")
+            if rec["quote_unsupported"]:
+                v += (f' <font color="{_RED.hexval()}">(quote check: '
+                      f'{escape(rec["quote_unsupported"])})</font>')
         elif key == "reviewer_note":
             v = f'<font color="{_NAVY.hexval()}">{v}</font>'
         elif key == "reviewed_by":

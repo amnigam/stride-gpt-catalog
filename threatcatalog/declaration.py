@@ -78,6 +78,8 @@ def apply_detection(rows: dict[str, DeclarationRow], detected: list[LedgerEntry]
             ev.ai_note = d.ai_note or e.evidence
             ev.ai_quote = d.ai_quote
             ev.quote_verified = d.quote_verified
+            ev.quote_supports = d.quote_supports
+            ev.support_note = d.support_note
         else:
             ev.ai_status = None
             ev.ai_confidence = None
@@ -85,6 +87,8 @@ def apply_detection(rows: dict[str, DeclarationRow], detected: list[LedgerEntry]
             ev.ai_note = None
             ev.ai_quote = None
             ev.quote_verified = None
+            ev.quote_supports = None
+            ev.support_note = None
         if not was_touched:
             row.status = ev.ai_status or ControlStatus.UNKNOWN
             ev.note = ev.ai_note          # empty box when there is no evidence
@@ -167,6 +171,8 @@ def needs_note(row: DeclarationRow) -> str | None:
     ev = row.evidence
     if ev.ai_status is not None and row.status != ev.ai_status and not ev.reviewer_note:
         return "status changed from the AI's suggestion without a reviewer note"
+    if ev.quote_supports is False and not ev.reviewed and not ev.reviewer_note:
+        return "the quote the AI cited does not clearly support its status: confirm or correct"
     if row.status in _WEAK and not (ev.note or "").strip():
         return f"marked {row.status.value.replace('_', ' ')} without a note"
     if ev.ai_status is None and row.status != ControlStatus.UNKNOWN and not ev.reviewer_note:

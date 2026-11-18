@@ -241,6 +241,8 @@ def _ai_label(row: DeclarationRow) -> str:
     label = " · ".join(b for b in bits if b)
     if ev.quote_verified is False:
         label += "  ⚠ quote not found"
+    if ev.quote_supports is False:
+        label += "  ⚠ quote doesn't support it"
     return label
 
 

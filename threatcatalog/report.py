@@ -104,6 +104,8 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
             "ai_evaluation": ai,
             "quote": _flat(ev.ai_quote) or None,
             "quote_unverified": ev.quote_verified is False,
+            "quote_unsupported": (_flat(ev.support_note) or "the quote does not clearly support "
+                                  "this status") if ev.quote_supports is False else None,
             "ai_note": _flat(ev.ai_note) if ev.ai_status is not None else None,
             "reviewer_note": None if auto else (_flat(ev.reviewer_note) or None),
             "reviewed_by": None if auto else (
@@ -337,7 +339,8 @@ def sad_facts(r: ThreatModelReport) -> dict | None:
     if sc.document_title:
         src.append(("Document", sc.document_title + (f" (version {sc.document_version})"
                                                      if sc.document_version else "")))
-    size = f"{sc.words:,} words" + (f", {sc.pages} pages" if sc.pages else "")
+    size = f"{sc.words:,} words" + (f", {'about ' if sc.pages_estimated else ''}{sc.pages} pages"
+                                    if sc.pages else "")
     src += [("Size", size), ("SHA-256", sc.sha256[:16] + "…"),
             ("Diagrams read", f"{len(sc.diagrams_read)}" + (f" ({'; '.join(sc.diagrams_read)})"
                                                          if sc.diagrams_read else "")),
@@ -536,6 +539,8 @@ def _evidence_md(r: ThreatModelReport) -> list[str]:
                     v = f"\u201c{_ecell(val)}\u201d"
                     if rec["quote_unverified"]:
                         v += " \u26A0 _not found verbatim in the source_"
+                    if rec["quote_unsupported"]:
+                        v += f" \u26A0 _quote check: {_ecell(rec['quote_unsupported'])}_"
                 elif key == "ai":
                     v = f"**{_ecell(val)}**"
                 else:

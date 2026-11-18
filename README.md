@@ -229,12 +229,18 @@ Solution Architecture Document:
    mobile app"); a facet it only infers is included and marked *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
    components), the page stops** and offers a feedback checklist for the SAD author
    instead of a report.
-3. **Confirm** the profile on one screen (your changes are recorded in the report).
+3. **Confirm** the profile on one screen: tick or untick facets in the table (the white
+   *Include* column is editable; blue columns are the AI's proposal), and set the data
+   classification and PCI scope. Your changes are recorded in the report.
 4. **Run.** Controls are detected across the text and every diagram, and the SAD rules
    apply: a control the SAD **does not mention is Not present** (the report is deliberately
    harsh: what the SAD omits is taken as accepted by the business); a control only
    **implied** by features or the tech stack is **Partial** with a note that it must be
    confirmed; a cited quote that is not really in the SAD drops the control to Partial.
+   A second, cheap call on the same model then checks that each cited quote actually
+   backs its control's status. Quotes that don't are **flagged** for the reviewer (in the
+   evidence appendix, and as rows needing a note on the review page); statuses are never
+   changed by the check.
    The report opens with an *Assessment basis* section (file hash, engine, profile
    reasons, completeness, limitations). Download it as **Markdown** or **PDF**, plus the
    **declaration JSON**, which the main page can load for a human review pass.

@@ -114,7 +114,10 @@ doc = ss["sad_doc"]
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Words", f"{doc.words:,}")
-c2.metric("Pages", doc.pages or "—")
+c2.metric("Pages", (f"~{doc.pages}" if doc.pages_estimated else doc.pages) if doc.pages else "—",
+          help="Estimated for Word files: a DOCX has no fixed pages, so this is worked out "
+               "from the word and figure count (Word's own figure is used when it is "
+               "current)." if doc.pages_estimated else None)
 c3.metric("Diagrams to read", len(doc.images))
 c4.metric("Approx. input tokens", f"{doc.approx_tokens:,}")
 if doc.approx_tokens > 150_000:
@@ -148,6 +151,7 @@ if st.button("🔎 Check completeness and detect the application profile",
              disabled=not consent or not model_id):
     try:
         with st.spinner("Reading the SAD and its diagrams…"):
+            ss["sad_check_n"] = ss.get("sad_check_n", 0) + 1   # fresh profile table
             ss["sad_assessment"] = sadflow.assess(get_engine(), doc,
                                                   fallback_name=up.name.rsplit(".", 1)[0])
     except Exception as exc:  # noqa: BLE001 — surface provider/auth errors
@@ -190,19 +194,61 @@ st.subheader("3 · Confirm the application profile")
 st.caption("Pre-filled from the AI's reading of the SAD. Facets marked *assumed* were "
            "inferred or defaulted: check those. Changes you make are recorded in the report.")
 by_key = {f.facet: f for f in a.facets}
-facet_rows = [{
-    "Facet": f.facet, "Selected": "yes" if f.selected else "no",
-    "Assumed": "assumed" if f.assumed else "", "Reason": f.reason, "Quote": f.quote or "",
-} for f in a.facets]
-st.dataframe(pd.DataFrame(facet_rows), hide_index=True, use_container_width=True)
-
 name = st.text_input("Application name", a.application_name)
-platforms = st.multiselect("Platform", [p.value for p in PlatformFacet], [p.value for p in a.platforms])
-ai = st.multiselect("AI capability", [x.value for x in AICapability if x != AICapability.NONE],
-                    [x.value for x in a.ai_capabilities])
+
+# One row per platform and AI facet, so any of them can be switched on or off here.
+_FACET_ROWS = [f"platform:{p.value}" for p in PlatformFacet] + \
+              [f"ai:{x.value}" for x in AICapability if x != AICapability.NONE]
+_AI_TINT, _REF_TINT = "rgba(59, 130, 246, 0.12)", "rgba(128, 128, 128, 0.10)"
+_FACET_AI_COLS = ["AI proposal", "Assumed", "Reason", "Quote"]
+
+
+def _facet_label(k: str) -> str:
+    kind, val = k.split(":", 1)
+    return ("Platform: " if kind == "platform" else "AI: ") + val
+
+
+facet_table = pd.DataFrame([{
+    "Facet": _facet_label(k),
+    "Include": bool(by_key[k].selected) if k in by_key else False,
+    "AI proposal": ("yes" if by_key[k].selected else "no") if k in by_key else "not raised",
+    "Assumed": "assumed" if k in by_key and by_key[k].assumed else "",
+    "Reason": (by_key[k].reason or "") if k in by_key else "",
+    "Quote": (by_key[k].quote or "") if k in by_key else "",
+} for k in _FACET_ROWS])
+st.caption("**The white column with a pencil icon is yours to edit** (Include). "
+           ":blue-background[Blue] columns are the AI's proposal and its reasons and "
+           ":gray-background[grey] names the facet; both are read-only.")
+edited = st.data_editor(
+    facet_table.style.set_properties(subset=_FACET_AI_COLS, **{"background-color": _AI_TINT})
+                     .set_properties(subset=["Facet"], **{"background-color": _REF_TINT}),
+    key=f"sad_facets_{_upload_id}_{ss.get('sad_check_n', 0)}", hide_index=True, use_container_width=True,
+    num_rows="fixed", disabled=["Facet"] + _FACET_AI_COLS, row_height=56,
+    height=56 * len(facet_table) + 38,
+    column_config={
+        "Facet": st.column_config.TextColumn(width=150, pinned=True),
+        "Include": st.column_config.CheckboxColumn(
+            width=80, help="Tick to include this facet's controls in the threat model."),
+        "AI proposal": st.column_config.TextColumn(width=100),
+        "Assumed": st.column_config.TextColumn(width=90),
+        "Reason": st.column_config.TextColumn(width=360),
+        "Quote": st.column_config.TextColumn(width=300),
+    })
+_included = {k for k, inc in zip(_FACET_ROWS, edited["Include"]) if inc}
+platforms = [k.split(":", 1)[1] for k in _FACET_ROWS if k.startswith("platform:") and k in _included]
+ai = [k.split(":", 1)[1] for k in _FACET_ROWS if k.startswith("ai:") and k in _included]
+
+_dc_f = next((f for f in a.facets if f.facet.startswith("data:")), None)
+_pci_f = by_key.get("pci")
 dc = st.selectbox("Data classification", [d.value for d in DataClassification],
                   index=[d for d in DataClassification].index(a.data_classification))
+if _dc_f is not None and _dc_f.reason:
+    st.caption(f"AI proposal: {_dc_f.facet[5:]}{' (assumed)' if _dc_f.assumed else ''}. "
+               f"{_dc_f.reason}")
 pci = st.checkbox("Handles cardholder data (PCI in scope)", value=a.handles_cardholder_data)
+if _pci_f is not None and _pci_f.reason:
+    st.caption(f"AI proposal: PCI {'in' if _pci_f.selected else 'out of'} scope"
+               f"{' (assumed)' if _pci_f.assumed else ''}. {_pci_f.reason}")
 profile = AppProfile(name=name or a.application_name,
                      platforms=[PlatformFacet(p) for p in platforms] or [PlatformFacet.WEB],
                      ai_capabilities=[AICapability(x) for x in ai] or [AICapability.NONE],
@@ -268,6 +314,12 @@ for gi in report.gap_items:
 st.success(f"{len(report.threats)} threats · {counts.get('implemented', 0)} implemented · "
            f"{counts.get('partial', 0)} partial · {counts.get('not_present', 0)} not present · "
            f"PCI in scope: {report.pci_view.in_scope}")
+flagged = [e.control_id for e in ss["sad_ledger"] if e.detail and e.detail.quote_supports is False]
+if flagged:
+    st.warning(f"**{len(flagged)} control(s) cite a quote that does not clearly support their "
+               "status:** " + ", ".join(flagged) + ". Statuses are unchanged; the reason is shown "
+               "next to the quote in the evidence appendix, and the review page flags these rows "
+               "for a reviewer note.")
 md = render_markdown(report)
 rname = report.profile.name.replace(" ", "_")
 d1, d2, d3, d4 = st.columns(4)
