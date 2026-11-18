@@ -85,6 +85,9 @@ render(CORVANE, HERE.parent / "corvane-supplier-hub", [
     "back *not present* with a quote, not just silence.",
     "- PaaS patching and Front Door managed certificates should be *partial (inferred)* with a 'confirm' note.",
     "- PCI should be out of scope because the SAD says so explicitly.",
+    "- Messaging is in scope only through the BankVerify retry queue (§7), which names no broker. "
+    "Expect the messaging facet to be selected (inferred) and most MSG-* controls to come back "
+    "*not present*; MSG-DLQ-001 is *partial* (retries are capped, no dead-letter queue stated).",
 ])
 
 render(HALCYON, HERE.parent / "halcyon-claimpilot", [
