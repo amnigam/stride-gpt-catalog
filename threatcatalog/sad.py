@@ -24,7 +24,6 @@ All of this is pure logic over the engine's output, so it is testable offline.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -70,60 +69,6 @@ _RUBRIC_BY_ID = {r["id"]: r for r in RUBRIC}
 
 def rubric_for_prompt() -> list[dict]:
     return [{"id": r["id"], "title": r["title"]} for r in RUBRIC]
-
-
-# --------------------------------------------------------------------------- #
-# Deterministic keyword pass for facets (cross-checks the model)
-# --------------------------------------------------------------------------- #
-FACET_KEYWORDS: dict[str, list[str]] = {
-    "platform:web": [r"web application", r"web app", r"browser", r"single[- ]page app",
-                     r"\bspa\b", r"front[- ]?end", r"\breact\b", r"\bangular\b", r"\bvue\b",
-                     r"web portal", r"\bportal\b"],
-    "platform:cloud": [r"\baws\b", r"amazon web services", r"\bazure\b", r"\bgcp\b",
-                       r"google cloud", r"\bs3\b", r"\blambda\b", r"\bec2\b", r"cloudfront",
-                       r"\boci\b", r"public cloud"],
-    "platform:onprem": [r"on[- ]prem", r"on[- ]premises?", r"data cent(?:re|er)",
-                        r"\bmainframe\b", r"\bdmz\b"],
-    "platform:mobile": [r"\bios\b", r"\bandroid\b", r"mobile app", r"mobile application"],
-    "platform:multitenant": [r"multi[- ]?tenant", r"\btenants?\b", r"\bsaas\b"],
-    "platform:api": [r"\brest(?:ful)?\b", r"\bapis?\b", r"api gateway", r"graphql", r"\bgrpc\b",
-                     r"openapi", r"swagger", r"webhook"],
-    "platform:messaging": [r"\bkafka\b", r"rabbitmq", r"\bsqs\b", r"\bsns\b", r"event ?bridge",
-                           r"event bus", r"message (?:queue|broker|bus)", r"\bibm mq\b",
-                           r"service bus", r"\bsftp\b", r"batch file", r"pub/?sub", r"kinesis"],
-    "platform:container": [r"kubernetes", r"\bk8s\b", r"\beks\b", r"\baks\b", r"\bgke\b",
-                           r"docker", r"containers?\b", r"openshift", r"\becs\b", r"fargate",
-                           r"\bhelm\b"],
-    "ai:llm": [r"\bllms?\b", r"large language model", r"\bgpt[- ]?\d", r"\bclaude\b",
-               r"\bbedrock\b", r"openai", r"\bgemini\b", r"\bllama\b", r"chat ?bot",
-               r"\brag\b", r"retrieval[- ]augmented", r"embeddings?", r"generative ai",
-               r"\bgenai\b", r"copilot"],
-    "ai:llm_tools": [r"function[- ]calling", r"tool[- ]?(?:use|calling|calls)",
-                     r"langchain", r"semantic kernel", r"llamaindex"],
-    "ai:mcp": [r"\bmcp\b", r"model context protocol"],
-    "ai:agentic": [r"agentic", r"\bai agents?\b", r"autonomous agents?", r"multi[- ]agent",
-                   r"langgraph", r"crewai", r"autogen", r"bedrock agents?"],
-    "ai:generative": [r"image generation", r"text[- ]to[- ]image", r"generates? (?:images|content|"
-                      r"documents|reports|summaries)", r"content generation", r"stable diffusion",
-                      r"dall[- ]?e"],
-    "ai:training": [r"fine[- ]?tun", r"model training", r"train(?:s|ing)? (?:a |the |our )?models?",
-                    r"sagemaker training", r"training pipeline"],
-    "pci": [r"cardholder", r"card number", r"\bpan\b", r"credit card", r"debit card",
-            r"payment card", r"\bpci\b", r"\bcvv\b"],
-}
-
-
-def keyword_facets(text: str) -> dict[str, str]:
-    """facet -> first keyword phrase found in the text."""
-    hay = (text or "").lower()
-    hits: dict[str, str] = {}
-    for facet, patterns in FACET_KEYWORDS.items():
-        for pat in patterns:
-            m = re.search(pat, hay)
-            if m:
-                hits[facet] = m.group(0)
-                break
-    return hits
 
 
 # --------------------------------------------------------------------------- #
@@ -187,11 +132,13 @@ def _bool(v) -> bool:
 
 
 def parse_assessment(raw: dict, sad: ExtractedSad, fallback_name: str = "Application") -> SadAssessment:
-    """Normalise the model's assessment and merge it with the keyword pass.
+    """Normalise the model's assessment.
 
-    Facets are biased towards inclusion: a facet the model is unsure of, or one
-    only the keyword pass found, is selected and marked `assumed` so it is
-    confirmed on the profile screen rather than silently dropping controls."""
+    The model reads the whole SAD and its diagrams, so it alone decides the
+    profile: no keyword matching, which cannot tell "has no mobile app" from
+    "has a mobile app". The prompt biases it towards inclusion: a facet it is
+    unsure of comes back selected with basis 'inferred' and is marked `assumed`
+    so it is confirmed on the profile screen."""
     raw = raw if isinstance(raw, dict) else {}
     notes: list[str] = []
 
@@ -219,7 +166,6 @@ def parse_assessment(raw: dict, sad: ExtractedSad, fallback_name: str = "Applica
                                       evidence=_s(r.get("evidence")), comment=comment))
 
     # ---- facets ----
-    kw = keyword_facets(sad.text)
     llm: dict[str, dict] = {}
     for group, prefix in (("platforms", "platform"), ("ai_capabilities", "ai")):
         for r in raw.get(group) or []:
@@ -230,24 +176,15 @@ def parse_assessment(raw: dict, sad: ExtractedSad, fallback_name: str = "Applica
 
     def decide(key: str) -> bool:
         r = llm.get(key)
-        hit = kw.get(key)
-        if r is not None and _bool(r.get("selected")):
+        if r is None:
+            return False
+        if _bool(r.get("selected")):
             inferred = (_s(r.get("basis")) or "stated").lower() == "inferred"
-            facets.append(FacetReason(facet=key, selected=True,
-                                      reason=_s(r.get("reason")) or "",
-                                      quote=_s(r.get("quote")), assumed=inferred,
-                                      source="llm+keyword" if hit else "llm"))
+            facets.append(FacetReason(facet=key, selected=True, reason=_s(r.get("reason")) or "",
+                                      quote=_s(r.get("quote")), assumed=inferred, source="llm"))
             return True
-        if hit:
-            why = (f"Keyword '{hit}' appears in the SAD"
-                   + ("; the AI did not select this facet" if r is not None else "")
-                   + ". Included so its controls are not dropped: confirm.")
-            facets.append(FacetReason(facet=key, selected=True, reason=why, assumed=True,
-                                      source="keyword"))
-            return True
-        if r is not None:
-            facets.append(FacetReason(facet=key, selected=False, reason=_s(r.get("reason")) or "",
-                                      quote=_s(r.get("quote")), source="llm"))
+        facets.append(FacetReason(facet=key, selected=False, reason=_s(r.get("reason")) or "",
+                                  quote=_s(r.get("quote")), source="llm"))
         return False
 
     platforms = [p for p in PlatformFacet if decide(f"platform:{p.value}")]
@@ -276,16 +213,10 @@ def parse_assessment(raw: dict, sad: ExtractedSad, fallback_name: str = "Applica
     # ---- PCI ----
     pci_raw = raw.get("cardholder_data") if isinstance(raw.get("cardholder_data"), dict) else {}
     pci_val = (_s(pci_raw.get("value")) or "not_stated").lower()
-    pci_hit = kw.get("pci")
-    if pci_val == "yes" or pci_hit:
+    if pci_val == "yes":
         pci = True
-        facets.append(FacetReason(
-            facet="pci", selected=True,
-            reason=_s(pci_raw.get("reason")) if pci_val == "yes" else
-            f"Keyword '{pci_hit}' appears in the SAD. PCI treated as in scope: confirm.",
-            quote=_s(pci_raw.get("quote")), assumed=pci_val != "yes",
-            source="llm+keyword" if pci_val == "yes" and pci_hit else
-            ("llm" if pci_val == "yes" else "keyword")))
+        facets.append(FacetReason(facet="pci", selected=True, reason=_s(pci_raw.get("reason")) or "",
+                                  quote=_s(pci_raw.get("quote")), source="llm"))
     else:
         pci = False
         stated = pci_val == "no"

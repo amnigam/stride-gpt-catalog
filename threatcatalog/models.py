@@ -407,7 +407,7 @@ class FacetReason(BaseModel):
     reason: str = ""
     quote: Optional[str] = None
     assumed: bool = False                    # not stated outright: inferred, keyword-only or a default
-    source: str = "llm"                      # llm | keyword | llm+keyword | default | reviewer
+    source: str = "llm"                      # llm | default | reviewer (keyword, llm+keyword: older reports)
 
 
 class SadContext(BaseModel):

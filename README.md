@@ -224,9 +224,9 @@ Solution Architecture Document:
    cannot read are listed so you can export them as PNG. The page shows what will be
    sent and asks you to confirm the document may go to the selected provider.
 2. **Check** — one call scores the SAD against a fixed 12-item completeness rubric and
-   proposes the application profile, each facet with its reason and a quote. A keyword
-   pass cross-checks the model; anything only one of them found is included and marked
-   *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
+   proposes the application profile, each facet with its reason and a quote. The model
+   alone decides the profile (no keyword matching, which misreads sentences such as "has no
+   mobile app"); a facet it only infers is included and marked *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
    components), the page stops** and offers a feedback checklist for the SAD author
    instead of a report.
 3. **Confirm** the profile on one screen (your changes are recorded in the report).

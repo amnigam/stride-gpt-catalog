@@ -180,8 +180,8 @@ with st.expander("Completeness check", expanded=bool(gaps)):
 
 # ---------------------------------------------------------------- confirm ----
 st.subheader("3 · Confirm the application profile")
-st.caption("Pre-filled from the SAD. Facets marked *assumed* were inferred, found only by "
-           "keyword, or defaulted: check those. Changes you make are recorded in the report.")
+st.caption("Pre-filled from the AI's reading of the SAD. Facets marked *assumed* were "
+           "inferred or defaulted: check those. Changes you make are recorded in the report.")
 by_key = {f.facet: f for f in a.facets}
 facet_rows = [{
     "Facet": f.facet, "Selected": "yes" if f.selected else "no",
@@ -216,7 +216,7 @@ def final_facets() -> list[FacetReason]:
             if now != f.selected:
                 f = f.model_copy(update={"selected": now, "source": "reviewer", "assumed": False,
                                          "reason": f"{'Added' if now else 'Removed'} by {who}. "
-                                                   f"AI/keyword proposal: {f.reason or '—'}"})
+                                                   f"AI proposal: {f.reason or '—'}"})
             out.append(f)
         elif f.facet.startswith("data:"):
             if dc != a.data_classification.value:
