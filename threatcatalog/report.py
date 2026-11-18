@@ -47,8 +47,26 @@ EVIDENCE_NOTE_REVIEW = ("Automated assessment. The AI evaluations below were pro
                         "status or note, their change is shown next to it.")
 
 
+def automated(r: ThreatModelReport) -> bool:
+    """A SAD run nobody has reviewed: the AI evaluation is every row's status."""
+    return r.sad is not None and not r.sad.reviewed
+
+
+def sad_banner(r: ThreatModelReport) -> tuple[str, str] | None:
+    """(bold lead, text) for the banner under the title of a SAD-based report."""
+    if r.sad is None:
+        return None
+    if not r.sad.reviewed:
+        return "Automated draft from SAD.", SAD_RULES_TEXT
+    who = r.sad.reviewed_by or "a reviewer"
+    return ("From SAD, then reviewed.",
+            f"Statuses started from an automated assessment of the SAD and were then "
+            f"reviewed by {who} on the review page. Where the reviewer changed a status or "
+            f"note, the change is shown next to the AI evaluation in the evidence appendix.")
+
+
 def evidence_note(r: ThreatModelReport) -> str:
-    return EVIDENCE_NOTE_SAD if r.sad is not None else EVIDENCE_NOTE_REVIEW
+    return EVIDENCE_NOTE_SAD if automated(r) else EVIDENCE_NOTE_REVIEW
 
 
 def evidence_records(r: ThreatModelReport) -> list[dict]:
@@ -59,7 +77,7 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
     In an automated (SAD) run nobody can review a row, so the review-only fields
     (`final_status`, `basis`, `reviewer_note`, `reviewed_by`) are left out: the AI
     evaluation *is* the status."""
-    automated = r.sad is not None
+    auto = automated(r)
     recs = []
     for gi in r.gap_items:
         ev = gi.evidence
@@ -82,13 +100,13 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
             "control": f"{gi.control.id} {gi.control.title}",
             "status_enum": gi.status,
             "status": _STATUS_LABEL[gi.status],
-            "basis": None if automated else basis_label(gi),
+            "basis": None if auto else basis_label(gi),
             "ai_evaluation": ai,
             "quote": _flat(ev.ai_quote) or None,
             "quote_unverified": ev.quote_verified is False,
             "ai_note": _flat(ev.ai_note) if ev.ai_status is not None else None,
-            "reviewer_note": None if automated else (_flat(ev.reviewer_note) or None),
-            "reviewed_by": None if automated else (
+            "reviewer_note": None if auto else (_flat(ev.reviewer_note) or None),
+            "reviewed_by": None if auto else (
                 " \u00b7 ".join(x for x in (ev.reviewer, when) if x) or None),
         })
     return recs
@@ -257,7 +275,7 @@ def summary_facts(r: ThreatModelReport) -> dict:
     n_ai_only = sum(1 for g in gi if g.basis == EvidenceBasis.AI_UNREVIEWED
                     and g.status != ControlStatus.UNKNOWN)
     n_override = sum(1 for g in gi if g.basis == EvidenceBasis.REVIEWER_OVERRIDE)
-    if n_ai_only and r.sad is None:      # SAD runs say so once, in the banner
+    if n_ai_only and not automated(r):   # automated SAD runs say so once, in the banner
         notes.append(f"{n_ai_only} control status(es) rest on AI evaluations that no "
                      f"reviewer has confirmed")
     if n_override:
@@ -385,8 +403,9 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"*PCI in scope:* {'yes' if p.handles_cardholder_data else 'no'}\n")
     if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
         out.append(diagrams_line(r) + "\n")
-    if r.sad is not None:
-        out.append(f"> **Automated draft from SAD.** {SAD_RULES_TEXT}\n")
+    banner = sad_banner(r)
+    if banner:
+        out.append(f"> **{banner[0]}** {banner[1]}\n")
 
     # Executive summary — deterministic roll-up, first thing a reader sees
     out.extend(_executive_summary(r))
@@ -398,7 +417,7 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append("## Control gap register\n")
     # Basis says who stands behind a status; in an automated SAD run it is the AI
     # for every row, so the column is dropped there.
-    show_basis = r.sad is None
+    show_basis = not automated(r)
     out.append("| Control | Status |" + (" Basis |" if show_basis else "") + " Frameworks | PCI exposed |")
     out.append("|---|---|" + ("---|" if show_basis else "") + "---|---|")
     for gi in r.gap_items:

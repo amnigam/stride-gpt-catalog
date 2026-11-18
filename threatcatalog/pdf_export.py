@@ -31,7 +31,8 @@ from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTe
 
 from .models import ControlStatus, ThreatModelReport
 from .report import (_STATUS_LABEL, EVIDENCE_TITLE, basis_label, evidence_fields,
-                     evidence_groups, evidence_note, sad_facts, summary_facts)
+                     automated, evidence_groups, evidence_note, sad_banner,
+                     sad_facts, summary_facts)
 
 # ---- palette ----
 _NAVY = colors.HexColor("#1f2c4c")
@@ -246,10 +247,10 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             txt += " &nbsp;|&nbsp; " + escape("Not read: " + "; ".join(r.diagrams_skipped))
         el.append(Paragraph(txt, ss["Meta"]))
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
-    sf = sad_facts(r)
-    if sf is not None:
-        el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>Automated draft from SAD.'
-                            f'</b></font> {escape(sf["rules"])}', ss["Body"]))
+    banner = sad_banner(r)
+    if banner is not None:
+        el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>{escape(banner[0])}'
+                            f'</b></font> {escape(banner[1])}', ss["Body"]))
 
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
@@ -292,6 +293,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             "— all expected controls are confirmed in place.", ss["Body"]))
 
     # ---- SAD assessment basis ----
+    sf = sad_facts(r)
     if sf is not None:
         el.append(Paragraph("Assessment basis (SAD)", ss["H2"]))
         el.append(_table([["Item", "Value"]] + [list(x) for x in sf["source"]],
@@ -310,7 +312,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
 
     # ---- gap register (colour-coded status) ----
     el.append(Paragraph("Control gap register", ss["H2"]))
-    show_basis = r.sad is None   # automated SAD run: the AI is the basis of every row
+    show_basis = not automated(r)   # automated SAD run: the AI is the basis of every row
     rows = [["Control", "Status"] + (["Basis"] if show_basis else []) + ["Frameworks", "PCI exposed"]]
     for gi in r.gap_items:
         fws = ", ".join(x.ref for x in gi.control.threat_frameworks) or "\u2014"

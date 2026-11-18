@@ -34,7 +34,8 @@ from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
                                        apply_detection, apply_editor_changes,
                                        ensure_rows,
                                        evidence_basis, export_json, import_json,
-                                       needs_note, to_ledger)
+                                       needs_note, profile_differences,
+                                       reviewed_sad_context, sad_handoff, to_ledger)
 from threatcatalog.intake import detect_from_text
 from threatcatalog.llm.factory import BEDROCK, OFFLINE, default_model
 from threatcatalog.llm.factory import build_engine as _factory_build
@@ -57,17 +58,27 @@ def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = 
                           max_tokens=max_tokens, region=aws_region, aws_profile=aws_profile)
 
 
+ENGINES = ["OpenAI (ChatGPT)", "Anthropic (Claude)", BEDROCK, OFFLINE]
+# A declaration exported from the SAD page carries the confirmed profile and engine.
+# Loading it (step 3) queues them here; they are applied before the widgets are drawn.
+for _k, _v in (st.session_state.pop("_pending_widgets", None) or {}).items():
+    st.session_state[_k] = _v
+for _k, _v in (("engine_choice", ENGINES[0]), ("app_name", "PeopleDesk"),
+               ("app_platforms", ["web", "cloud"]), ("app_ai", ["llm"]),
+               ("app_dc", "Restricted"), ("app_pci", False), ("obs_raw", "")):
+    st.session_state.setdefault(_k, _v)
+
 with st.sidebar:
     st.header("0 · Model engine")
     engine_choice = st.selectbox(
-        "Generation engine",
-        ["OpenAI (ChatGPT)", "Anthropic (Claude)", BEDROCK, OFFLINE],
+        "Generation engine", ENGINES, key="engine_choice",
         help="Deterministic needs no API key. The others build the narrative with "
              "the model you name below, and read the diagram.")
     model_id, api_key, base_url, aws_region, aws_profile = "", "", "", "", ""
     max_out_tokens = 32000
     if engine_choice != OFFLINE:
-        model_id = st.text_input("Model id", default_model(engine_choice),
+        st.session_state.setdefault(f"model_id::{engine_choice}", default_model(engine_choice))
+        model_id = st.text_input("Model id", key=f"model_id::{engine_choice}",
                                  help="e.g. gpt-5.2, claude-sonnet-4-6, or a Bedrock model / "
                                       "inference-profile id — whatever your org provides.")
     if engine_choice == BEDROCK:
@@ -95,11 +106,11 @@ with st.sidebar:
                        "change in the declaration, and shown in the report.")
 
     st.header("1 · Application facets")
-    name = st.text_input("Application name", "PeopleDesk")
-    platforms = st.multiselect("Platform", [p.value for p in PlatformFacet], ["web", "cloud"])
-    ai = st.multiselect("AI capability", [a.value for a in AICapability], ["llm"])
-    dc = st.selectbox("Data classification", [d.value for d in DataClassification], index=3)
-    pci = st.checkbox("Handles cardholder data (PCI in scope)", value=False)
+    name = st.text_input("Application name", key="app_name")
+    platforms = st.multiselect("Platform", [p.value for p in PlatformFacet], key="app_platforms")
+    ai = st.multiselect("AI capability", [a.value for a in AICapability], key="app_ai")
+    dc = st.selectbox("Data classification", [d.value for d in DataClassification], key="app_dc")
+    pci = st.checkbox("Handles cardholder data (PCI in scope)", key="app_pci")
 
 profile = AppProfile(
     name=name,
@@ -148,6 +159,15 @@ st.caption("Detect reads the description and — with an LLM engine — every di
            "it finds evidence for; it never marks one absent, so unseen controls stay "
            "'unknown'. The offline engine falls back to keyword matching.")
 
+# profile confirmed on the SAD page, when the loaded declaration came from there
+_handoff = st.session_state.get("_handoff")
+_drift = profile_differences(_handoff.profile, profile) if _handoff else []
+if _drift:
+    st.warning("**This profile differs from the one confirmed on the SAD page:** "
+               + "; ".join(_drift) + ". Controls are expected for the profile in the sidebar, "
+               "so controls added this way start as unknown and controls removed this way "
+               "leave the review and the report. The change is recorded in the report.")
+
 rows: dict[str, DeclarationRow] = st.session_state.setdefault("decl_rows", {})
 ensure_rows(rows, expected)
 st.session_state.setdefault("decl_ver", 0)
@@ -191,7 +211,14 @@ if st.button("🔍 Detect controls from diagrams + description"):
     st.rerun()
 
 _detected = st.session_state.get("_detected", {})
-if st.session_state.get("_detected_done"):
+_loaded = st.session_state.get("_decl_loaded_info")
+if _loaded and not _detected:
+    st.success(f"Loaded {_loaded['rows']} control(s) from {_loaded['file']}"
+               + (f", {_loaded['ai']} with an AI evaluation" if _loaded["ai"] else "")
+               + (" and the profile confirmed on the SAD page" if _handoff else "")
+               + ". Review the statuses and notes below; anything you change is recorded "
+               "under your name.")
+elif st.session_state.get("_detected_done"):
     by_src = {}
     for src in _detected.values():
         by_src[src] = by_src.get(src, 0) + 1
@@ -282,6 +309,28 @@ def _declaration_table() -> None:
                     rows.update(loaded)
                     ensure_rows(rows, expected)
                     st.session_state["_decl_loaded"] = digest
+                    st.session_state["_decl_loaded_info"] = {
+                        "file": upload.name, "rows": len(loaded),
+                        "ai": sum(1 for r in loaded.values() if r.evidence.ai_status is not None)}
+                    st.session_state["_detected"] = {}
+                    h = sad_handoff(meta)
+                    st.session_state["_handoff"] = h
+                    if h is not None:
+                        p = h.profile
+                        pending = {
+                            "app_name": p.name,
+                            "app_platforms": [x.value for x in p.platforms],
+                            "app_ai": [x.value for x in p.ai_capabilities
+                                       if x != AICapability.NONE],
+                            "app_dc": p.data_classification.value,
+                            "app_pci": p.handles_cardholder_data,
+                            "obs_raw": "\n".join(f"{o.name} — {o.description}".rstrip(" —")
+                                                  for o in h.other_controls)}
+                        if h.provider in ENGINES:
+                            pending["engine_choice"] = h.provider
+                            if h.model_id:
+                                pending[f"model_id::{h.provider}"] = h.model_id
+                        st.session_state["_pending_widgets"] = pending
                     st.session_state["_detected_done"] = True
                     st.session_state["decl_ver"] += 1
                     st.rerun()
@@ -403,7 +452,7 @@ attention = [cid for cid in (c.id for c in expected) if needs_note(rows[cid])]
 declared: list[LedgerEntry] = to_ledger(rows, expected)
 
 obs_raw = st.text_area("Other controls you implement that may not be in the catalog "
-                       "(one per line: name — description)", height=80)
+                       "(one per line: name — description)", height=80, key="obs_raw")
 observed = []
 for line in obs_raw.splitlines():
     if "—" in line or "-" in line:
@@ -430,6 +479,9 @@ if st.button("Run threat model", type="primary"):
         report = pipeline.run(profile, description=description, declared=declared,
                               observed_unmatched=observed, engine=engine,
                               controls=catalog.controls)
+        if _handoff is not None:   # keep the SAD record, marked as reviewed
+            report.sad = reviewed_sad_context(_handoff, profile,
+                                              st.session_state.get("reviewer"))
         report.diagrams_read = list(st.session_state.get("_diagrams_read") or [])
         report.diagrams_skipped = list(st.session_state.get("_diagrams_skipped") or [])
     except Exception as exc:                       # noqa: BLE001

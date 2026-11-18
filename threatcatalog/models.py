@@ -428,6 +428,12 @@ class SadContext(BaseModel):
     profile_confirmed_by: Optional[str] = None
     notes: list[str] = Field(default_factory=list)
     generated_at: Optional[str] = None
+    # controls the SAD describes that are not in the catalog (carried to the review page)
+    other_controls: list[ObservedControl] = Field(default_factory=list)
+    # set when the SAD declaration was loaded on the review page and run from there:
+    # the statuses are then the reviewer's, not purely automated
+    reviewed: bool = False
+    reviewed_by: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #

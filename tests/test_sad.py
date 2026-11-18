@@ -215,7 +215,7 @@ def test_sad_ledger_rules(catalog, web_llm_profile):
 
 
 # ------------------------------------------------------------ end-to-end run --
-def test_end_to_end_run_on_stub(catalog):
+def _stub_sad_run(catalog):
     sad = _sad("PayFlow is a web portal. All traffic uses TLS 1.2 everywhere.")
     profile = AppProfile(name="PayFlow", platforms=[PlatformFacet.WEB],
                          ai_capabilities=[AICapability.NONE],
@@ -243,6 +243,12 @@ def test_end_to_end_run_on_stub(catalog):
     assert stub.multi_image_calls and stub.multi_image_calls[0][2] == 1
     report, ledger = sadflow.run(sad, a, profile, eng, catalog.controls, engine_label="stub",
                                  confirmed_by="Amit")
+    return sad, profile, expected, report, ledger
+
+
+def test_end_to_end_run_on_stub(catalog):
+    sad, profile, expected, report, ledger = _stub_sad_run(catalog)
+    first = expected[0].id
     status = {gi.control.id: gi for gi in report.gap_items}
     assert status[first].status == ControlStatus.IMPLEMENTED
     others = [gi for cid, gi in status.items() if cid != first]
@@ -266,6 +272,46 @@ def test_end_to_end_run_on_stub(catalog):
     pytest.importorskip("reportlab")
     from threatcatalog.pdf_export import render_pdf
     assert render_pdf(report)[:4] == b"%PDF"
+
+
+def test_sad_declaration_hands_profile_and_record_to_review_page(catalog):
+    from threatcatalog import pipeline
+    from threatcatalog.declaration import (apply_edit, export_json, import_json,
+                                           profile_differences, reviewed_sad_context,
+                                           sad_handoff, to_ledger)
+    from threatcatalog.report import render_markdown
+    sad, profile, expected, report, ledger = _stub_sad_run(catalog)
+    blob = export_json(sadflow.declaration_rows(ledger),
+                       meta=sadflow.declaration_meta(report, "AWS Bedrock", "model-x"))
+    rows, meta = import_json(blob)
+    h = sad_handoff(meta)
+    assert h.profile == report.profile and h.provider == "AWS Bedrock" and h.model_id == "model-x"
+    assert [o.name for o in h.other_controls] == ["Quarterly pen test"]
+    assert h.sad.sha256 == sad.sha256 and h.sad.completeness
+
+    # the reviewer changes one status and widens the profile on the review page
+    apply_edit(rows[expected[1].id], ControlStatus.IMPLEMENTED, "Seen in the runbook",
+               False, "Priya")
+    wider = profile.model_copy(update={"platforms": [PlatformFacet.WEB, PlatformFacet.API]})
+    assert profile_differences(h.profile, wider) == ["Platform added: api"]
+    assert profile_differences(h.profile, h.profile) == []
+    reviewed = pipeline.run(profile, declared=to_ledger(rows, expected), controls=catalog.controls)
+    reviewed.sad = reviewed_sad_context(h, wider, "Priya")
+    md = render_markdown(reviewed)
+    assert "From SAD, then reviewed." in md and "Automated draft from SAD" not in md
+    assert "Assessment basis (SAD)" in md                  # SAD record kept
+    assert "Profile changed on the review page by Priya" in md
+    assert "| Control | Status | Basis |" in md              # review columns are back
+    assert "no person has reviewed it" not in md
+    pytest.importorskip("reportlab")
+    from threatcatalog.pdf_export import render_pdf
+    assert render_pdf(reviewed)[:4] == b"%PDF"
+
+
+def test_plain_declaration_has_no_sad_handoff():
+    from threatcatalog.declaration import sad_handoff
+    assert sad_handoff({"application": "X"}) is None
+    assert sad_handoff({"profile": {"name": 1, "platforms": "bad"}}) is None
 
 
 # ------------------------------------------------------------------ Bedrock --
