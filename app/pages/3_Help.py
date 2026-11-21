@@ -148,6 +148,9 @@ with dread_tab:
         ("Data classification Confidential", "Damage +1"),
         ("Threat is Information Disclosure (STRIDE)", "Damage +1"),
         ("Threat is Denial of Service (STRIDE)", "Affected users +1"),
+        ("Control is PCI-mapped and PCI is in scope", "Damage +1"),
+        ("Control is recommended or conditional, not required", "Affected users −1"),
+        ("SAD does not mention the control (SAD silent)", "Reproducibility −1"),
         ("A compensating control was flagged", "Damage −2, Exploitability −2"),
         ("Every factor", "Kept between 1 and 10"),
     ], columns=["Condition", "Effect"]), hide_index=True)

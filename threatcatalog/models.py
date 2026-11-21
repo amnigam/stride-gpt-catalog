@@ -326,6 +326,29 @@ class Threat(BaseModel):
     description: str
     enabling_gap: Optional[str] = None            # control id whose gap enables this
     framework_ref: Optional[str] = None
+    # architecture-aware threats (optional so older engines and reports still work)
+    actor: Optional[str] = None                   # who attacks: "external attacker", "malicious supplier user"
+    target: Optional[str] = None                  # entry point or asset: "Supplier portal bank-details form"
+    impact: Optional[str] = None                  # business impact if it succeeds
+    related_gaps: list[str] = Field(default_factory=list)   # further control ids it exploits
+
+    @property
+    def gaps(self) -> list[str]:
+        """Every control id this threat is linked to, enabling gap first."""
+        out = [self.enabling_gap] if self.enabling_gap else []
+        return out + [g for g in self.related_gaps if g and g not in out]
+
+
+class ActionItem(BaseModel):
+    """One row of the action plan: replaces separate recommendations and
+    mitigations with a single list a delivery team can work from."""
+    id: str
+    action: str
+    threat_ids: list[str] = Field(default_factory=list)
+    control_ids: list[str] = Field(default_factory=list)
+    priority: str = "High"                        # Critical | High | Medium | Low
+    timing: str = "Before go-live"                # "Before go-live" | "Within 90 days"
+    owner: str = ""                               # left blank for the team to fill
 
 
 class Recommendation(BaseModel):
@@ -349,6 +372,7 @@ class DreadScore(BaseModel):
     exploitability: int = Field(ge=1, le=10)
     affected_users: int = Field(ge=1, le=10)
     discoverability: int = Field(ge=1, le=10)
+    rationale: Optional[str] = None               # one line: why these scores
 
     @computed_field
     @property
@@ -394,6 +418,24 @@ class RubricScore(str, Enum):
     PRESENT = "present"
     THIN = "thin"
     MISSING = "missing"
+
+
+class ArchitectureSummary(BaseModel):
+    """What the threats are built on: the system's parts and boundaries, as read
+    from the SAD or from the description and diagrams. Short phrases only."""
+    components: list[str] = Field(default_factory=list)
+    entry_points: list[str] = Field(default_factory=list)       # where untrusted input arrives
+    data_stores: list[str] = Field(default_factory=list)        # assets holding data
+    external_integrations: list[str] = Field(default_factory=list)
+    data_flows: list[str] = Field(default_factory=list)         # "A -> B: what"
+    trust_boundaries: list[str] = Field(default_factory=list)
+    exposure: Optional[str] = None                              # "internet-facing; SSO users"
+
+    @property
+    def empty(self) -> bool:
+        return not any((self.components, self.entry_points, self.data_stores,
+                        self.external_integrations, self.data_flows, self.trust_boundaries,
+                        self.exposure))
 
 
 class CompletenessItem(BaseModel):
@@ -443,6 +485,8 @@ class SadContext(BaseModel):
     # the statuses are then the reviewer's, not purely automated
     reviewed: bool = False
     reviewed_by: Optional[str] = None
+    # read from the SAD in the assessment call; carried to the review page
+    architecture: Optional[ArchitectureSummary] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -470,3 +514,8 @@ class ThreatModelReport(BaseModel):
     # assessment basis for review-page runs (the SAD record covers SAD runs)
     description_words: Optional[int] = None
     engine: Optional[str] = None
+    # architecture summary the threats were built on (SAD, JSON handoff or Detect)
+    architecture: Optional[ArchitectureSummary] = None
+    # review-page runs: the SAD completeness checklist applied to description + diagrams
+    input_completeness: list[CompletenessItem] = Field(default_factory=list)
+    actions: list[ActionItem] = Field(default_factory=list)

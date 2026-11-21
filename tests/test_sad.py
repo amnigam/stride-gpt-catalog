@@ -250,10 +250,11 @@ def _stub_sad_run(catalog):
          "rationale": "useful"},                                             # out-of-catalog
         [{"id": "T1", "stride": "Spoofing", "title": "Session hijack",
           "enabling_gap": expected[1].id}],                                   # threats
-        [{"control_id": expected[1].id, "title": "Add it", "action": "Do it"}],  # recs
-        [{"threat_id": "T1", "action": "Rotate sessions"}],                  # mitigations
         [{"threat_id": "T1", "damage": 8, "reproducibility": 6, "exploitability": 6,
           "affected_users": 7, "discoverability": 5}],                       # DREAD
+        [{"action": "Rotate sessions", "threat_ids": ["T1"],
+          "control_ids": [expected[1].id], "priority": "High",
+          "timing": "Before go-live"}],                                       # action plan
     ])
     eng = LLMArtifactEngine(stub)
     a = sadflow.assess(eng, sad)
@@ -277,7 +278,13 @@ def test_end_to_end_run_on_stub(catalog):
     assert all(gi.basis == EvidenceBasis.AI_UNREVIEWED for gi in report.gap_items)
     assert report.clarifications == []                      # nothing left 'unknown'
     assert report.sad.profile_confirmed_by == "Amit"
-    assert [t.id for t in report.threats] == ["T1"] and len(report.dread) == 1
+    # the model's threat leads; every other finding is covered by an offline threat
+    assert report.threats[0].id == "T1" and report.threats[0].title == "Session hijack"
+    findings = {g.control.id for g in report.gap_items if g.is_finding}
+    assert {g for t in report.threats for g in t.gaps} == findings
+    assert {d.threat_id for d in report.dread} == {t.id for t in report.threats}
+    assert report.actions[0].action == "Rotate sessions"
+    assert {c for a in report.actions for c in a.control_ids} == findings
     assert report.candidates and report.candidates[0].title == "Quarterly pen test"
 
     from threatcatalog.report import render_markdown

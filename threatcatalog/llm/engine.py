@@ -19,9 +19,9 @@ simply use `DeterministicArtifactEngine`, whose extractor is a no-op.
 
 from __future__ import annotations
 
-from ..models import (AppProfile, Confidence, ControlEvidence, ControlStatus, DreadScore, GapItem,
-                      Layer, LedgerEntry, Mitigation, ObservedControl,
-                      OutOfCatalogAssessment, Provenance, Recommendation, Stride,
+from ..models import (ActionItem, AppProfile, Confidence, ControlEvidence, ControlStatus, DreadScore, GapItem,
+                      Layer, LedgerEntry, ObservedControl,
+                      OutOfCatalogAssessment, Provenance, Stride,
                       Threat)
 from . import prompts
 from .provider import RawLLM
@@ -139,6 +139,8 @@ def _listify(data, *keys):
 class LLMArtifactEngine:
     def __init__(self, raw: RawLLM):
         self.raw = raw
+        # set by detect_controls: {"architecture": ArchitectureSummary|None, "completeness": [...]}
+        self.last_detect_extras: dict = {"architecture": None, "completeness": []}
 
     # ---- diagram vision: reports only controls it can SEE, never absence ----
     def extract_controls(self, expected, diagram_image: bytes | None = None,
@@ -169,10 +171,21 @@ class LLMArtifactEngine:
         has_img = bool(imgs)
         if not description.strip() and not has_img:
             return []
+        from ..architecture import parse_architecture, parse_input_completeness
+        from ..sad import rubric_for_prompt
         system, user = prompts.detect_prompt(
             expected, description, has_diagram=has_img,
-            diagram_labels=[lab for _b, _mt, lab in imgs] if len(imgs) > 1 else None)
+            diagram_labels=[lab for _b, _mt, lab in imgs] if len(imgs) > 1 else None,
+            rubric=rubric_for_prompt())
         data = self._call_with_images(system, user, [(b, mt) for b, mt, _lab in imgs])
+        # the same call also summarises the architecture and scores the completeness
+        # checklist; neither touches a control status
+        if isinstance(data, dict):
+            self.last_detect_extras = {
+                "architecture": parse_architecture(data.get("architecture")),
+                "completeness": parse_input_completeness(data.get("completeness"), has_img)}
+        else:
+            self.last_detect_extras = {"architecture": None, "completeness": []}
 
         valid = {c.id for c in expected}
         entries: list[LedgerEntry] = []
@@ -272,8 +285,9 @@ class LLMArtifactEngine:
         return controls, others
 
     # ---- threats ----
-    def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]:
-        system, user = prompts.threats_prompt(gap, profile)
+    def generate_threats(self, gap: list[GapItem], profile: AppProfile,
+                         architecture=None) -> list[Threat]:
+        system, user = prompts.threats_prompt(gap, profile, architecture)
         data = self.raw.complete_json(system, user)
         out = []
         for i, d in enumerate(_listify(data, "threats", "items", "result"), start=1):
@@ -286,44 +300,36 @@ class LLMArtifactEngine:
                 "description": _as_str(d.get("description")),
                 "enabling_gap": _as_opt_str(d.get("enabling_gap")),
                 "framework_ref": _as_opt_str(d.get("framework_ref")),
+                "actor": _as_opt_str(d.get("actor")),
+                "target": _as_opt_str(d.get("target")),
+                "impact": _as_opt_str(d.get("impact")),
+                "related_gaps": _as_str_list(d.get("related_gaps")),
             }))
         return out
 
-    # ---- recommendations ----
-    def generate_recommendations(self, gap, profile) -> list[Recommendation]:
-        system, user = prompts.recommendations_prompt(gap, profile)
+    # ---- action plan (replaces recommendations + mitigations: one call) ----
+    def generate_action_plan(self, threats, gap, profile, dread, architecture=None) -> list[ActionItem]:
+        system, user = prompts.action_plan_prompt(threats, gap, profile, architecture)
         data = self.raw.complete_json(system, user)
         out = []
-        for d in _listify(data, "recommendations", "items"):
-            if not isinstance(d, dict):
+        for i, d in enumerate(_listify(data, "actions", "action_plan", "items"), start=1):
+            if not isinstance(d, dict) or not _as_str(d.get("action")):
                 continue
-            out.append(Recommendation.model_validate({
-                "control_id": _as_str(d.get("control_id")),
-                "title": _as_str(d.get("title")) or "Recommendation",
-                "action": _as_str(d.get("action")),
-                "frameworks": _as_str_list(d.get("frameworks")),
-            }))
-        return out
-
-    # ---- mitigations ----
-    def generate_mitigations(self, threats, gap, profile, compensating) -> list[Mitigation]:
-        system, user = prompts.mitigations_prompt(threats, gap, profile)
-        data = self.raw.complete_json(system, user)
-        out = []
-        for d in _listify(data, "mitigations", "items"):
-            if not isinstance(d, dict):
-                continue
-            out.append(Mitigation.model_validate({
-                "threat_id": _as_str(d.get("threat_id")),
-                "action": _as_str(d.get("action")),
-                "addresses_control": _as_opt_str(d.get("addresses_control")),
-                "note": _as_opt_str(d.get("note")),
-            }))
+            prio = (_as_str(d.get("priority"), "High") or "High").capitalize()
+            if prio not in ("Critical", "High", "Medium", "Low"):
+                prio = "High"
+            timing = _as_str(d.get("timing"), "")
+            timing = "Before go-live" if "go-live" in timing.lower() or "go live" in timing.lower() \
+                else "Within 90 days"
+            out.append(ActionItem(id=f"A{i}", action=_as_str(d.get("action")),
+                                  threat_ids=_as_str_list(d.get("threat_ids")),
+                                  control_ids=_as_str_list(d.get("control_ids")),
+                                  priority=prio, timing=timing))
         return out
 
     # ---- DREAD ----
-    def score_dread(self, threats, gap, profile) -> list[DreadScore]:
-        system, user = prompts.dread_prompt(threats, gap, profile)
+    def score_dread(self, threats, gap, profile, architecture=None) -> list[DreadScore]:
+        system, user = prompts.dread_prompt(threats, gap, profile, architecture)
         data = self.raw.complete_json(system, user)
         out = []
         for d in _listify(data, "dread", "scores", "items"):
@@ -336,6 +342,7 @@ class LLMArtifactEngine:
                 "exploitability": _as_int(d.get("exploitability")),
                 "affected_users": _as_int(d.get("affected_users")),
                 "discoverability": _as_int(d.get("discoverability")),
+                "rationale": _as_opt_str(d.get("rationale")),
             }))
         return out
 

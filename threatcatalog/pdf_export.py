@@ -30,7 +30,8 @@ from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTe
                                 Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, basis_facts, focus_items, tile_legend, document_control, evidence_fields, evidence_groups,
+from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, action_rows, architecture_rows, basis_facts,
+                     focus_items, threat_rows, tile_legend, document_control, evidence_fields, evidence_groups,
                      evidence_note, fw_text, out_of_catalog_rows, pci_groups,
                      register_columns, register_rows, sad_banner, sad_facts, stride_label,
                      summary_facts, threat_fw)
@@ -69,7 +70,7 @@ def _styles():
     ss.add(ParagraphStyle("H2", parent=ss["Heading2"], fontSize=12.5, textColor=_NAVY,
                           fontName="Helvetica-Bold", spaceBefore=16, spaceAfter=8,
                           leading=16, backColor=_BAND, borderColor=_BAND, borderWidth=0,
-                          borderPadding=(5, 6, 5, 6), leftIndent=0))
+                          borderPadding=(5, 6, 5, 6), leftIndent=0, keepWithNext=1))
     ss.add(ParagraphStyle("Body", parent=ss["Normal"], fontSize=9.5, leading=14.5,
                           alignment=TA_LEFT, spaceAfter=4))
     ss.add(ParagraphStyle("Lead", parent=ss["Normal"], fontSize=9.5, leading=12,
@@ -379,6 +380,11 @@ def render_pdf(r: ThreatModelReport) -> bytes:
                          [4.0 * cm, 12.5 * cm], ss))
         if r.diagrams_skipped:
             el.append(Paragraph(escape("Not read: " + "; ".join(r.diagrams_skipped)), ss["Meta"]))
+        if bf["completeness"]:
+            el.append(Paragraph("Input completeness (SAD checklist, warns only)", ss["Lead"]))
+            el.append(_table([["Item", "Result", "Evidence or what is missing"]]
+                             + [list(x) for x in bf["completeness"]],
+                             [5.2 * cm, 1.9 * cm, 9.4 * cm], ss))
         el.append(Paragraph("Limitations of this assessment", ss["Lead"]))
         for x in bf["limitations"]:
             el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
@@ -393,47 +399,65 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         el.append(Paragraph("No findings — every expected control is confirmed in place.",
                             ss["Body"]))
 
+    # ---- system context: what the threats are built on ----
+    arch = architecture_rows(r)
+    if arch:
+        el.append(Paragraph("System context", ss["H2"]))
+        el.append(_table([["Item", "Details"]] + [list(x) for x in arch],
+                         [4.0 * cm, 12.5 * cm], ss))
+
     # ---- threats ----
     el.append(Paragraph("Threat model", ss["H2"]))
     if r.threats:
-        rows = [["ID", "STRIDE", "Threat", "Gap", "Maps to"]]
-        for t in r.threats:
-            rows.append([t.id, stride_label(t.stride), t.title, t.enabling_gap or "\u2014",
-                         threat_fw(r, t) or "\u2014"])
-        el.append(_table(rows, [1.1 * cm, 2.5 * cm, 6.5 * cm, 3.4 * cm, 3.0 * cm], ss))
+        rows = [["ID", "STRIDE", "Threat", "Gaps", "Maps to"]]
+        for x in threat_rows(r):
+            cell = escape(x["title"])
+            if x["detail"]:
+                cell += f'<br/><font size="7.5" color="{_GREY.hexval()}">{escape(x["detail"])}</font>'
+            rows.append([x["id"], x["stride"], Paragraph(cell, ss["Cell"]), x["gaps"], x["maps"]])
+        el.append(_table(rows, [1.1 * cm, 2.4 * cm, 6.8 * cm, 3.3 * cm, 2.9 * cm], ss))
     else:
         el.append(Paragraph("No findings — all expected controls implemented or unknown.", ss["Body"]))
 
-    # ---- recommendations ----
-    el.append(Paragraph("Recommendations (gap-closing)", ss["H2"]))
-    for rec in r.recommendations:
-        fw = f' <i><font color="{_GREY.hexval()}">[{escape(", ".join(fw_text(x) for x in rec.frameworks))}]</font></i>' if rec.frameworks else ""
-        el.append(Paragraph(f"<b>{escape(rec.title)}</b> ({escape(rec.control_id)}) — "
-                            f"{escape(rec.action)}{fw}", ss["Bull"], bulletText="\u2022"))
-    if not r.recommendations:
-        el.append(Paragraph("None.", ss["Body"]))
-
-    # ---- mitigations ----
-    el.append(Paragraph("Mitigations (threat-specific)", ss["H2"]))
-    for m in r.mitigations:
-        note = f' <i><font color="{_AMBER.hexval()}">{escape(m.note)}</font></i>' if m.note else ""
-        el.append(Paragraph(f"<b>{escape(m.threat_id)}</b> &rarr; {escape(m.action)}{note}",
-                            ss["Bull"], bulletText="\u2022"))
-    if not r.mitigations:
-        el.append(Paragraph("None.", ss["Body"]))
-
-    # ---- DREAD (colour-coded priority) ----
+    # ---- DREAD (colour-coded priority, with the reason) ----
     el.append(Paragraph("DREAD scoring", ss["H2"]))
     if r.dread:
-        rows = [["Threat", "D", "R", "E", "A", "D", "Avg", "Priority"]]
-        for s in sorted(r.dread, key=lambda x: x.average, reverse=True):
-            rows.append([s.threat_id, s.damage, s.reproducibility, s.exploitability,
-                         s.affected_users, s.discoverability, s.average,
-                         _priority_cell(s.priority.value, ss)])
-        el.append(_table(rows, [2.2 * cm, 1.0 * cm, 1.0 * cm, 1.0 * cm, 1.0 * cm,
-                                1.0 * cm, 1.4 * cm, 2.6 * cm], ss))
+        rows = [["Threat", "D", "R", "E", "A", "D", "Avg", "Priority", "Why"]]
+        for sc in sorted(r.dread, key=lambda x: x.average, reverse=True):
+            rows.append([sc.threat_id, sc.damage, sc.reproducibility, sc.exploitability,
+                         sc.affected_users, sc.discoverability, sc.average,
+                         _priority_cell(sc.priority.value, ss),
+                         Paragraph(f'<font size="7.5">{escape(sc.rationale or "—")}</font>',
+                                   ss["Cell"])])
+        el.append(_table(rows, [1.5 * cm] + [0.7 * cm] * 5 + [1.1 * cm, 2.0 * cm, 8.4 * cm], ss))
     else:
         el.append(Paragraph("No scored threats.", ss["Body"]))
+
+    # ---- action plan (older engines: recommendations + mitigations) ----
+    if r.actions:
+        el.append(Paragraph("Action plan", ss["H2"]))
+        rows = [["#", "Action", "Closes", "Controls", "Priority", "Timing", "Owner"]]
+        for x in action_rows(r):
+            rows.append([x["id"], x["action"], x["closes"], x["controls"],
+                         _priority_cell(x["priority"], ss), x["timing"], x["owner"]])
+        el.append(_table(rows, [1.1 * cm, 5.5 * cm, 1.4 * cm, 3.5 * cm, 1.7 * cm, 1.9 * cm,
+                                1.4 * cm], ss))
+    else:
+        el.append(Paragraph("Recommendations (gap-closing)", ss["H2"]))
+        for rec in r.recommendations:
+            fw = (f' <i><font color="{_GREY.hexval()}">[{escape(", ".join(fw_text(x) for x in rec.frameworks))}]'
+                  "</font></i>") if rec.frameworks else ""
+            el.append(Paragraph(f"<b>{escape(rec.title)}</b> ({escape(rec.control_id)}) — "
+                                f"{escape(rec.action)}{fw}", ss["Bull"], bulletText="\u2022"))
+        if not r.recommendations:
+            el.append(Paragraph("None.", ss["Body"]))
+        el.append(Paragraph("Mitigations (threat-specific)", ss["H2"]))
+        for m in r.mitigations:
+            note = f' <i><font color="{_AMBER.hexval()}">{escape(m.note)}</font></i>' if m.note else ""
+            el.append(Paragraph(f"<b>{escape(m.threat_id)}</b> &rarr; {escape(m.action)}{note}",
+                                ss["Bull"], bulletText="\u2022"))
+        if not r.mitigations:
+            el.append(Paragraph("None.", ss["Body"]))
 
     # ---- clarifications ----
     if r.clarifications:
