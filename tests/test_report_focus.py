@@ -186,3 +186,10 @@ def test_pdf_renders_focus_page_for_every_flow(catalog, declared_missing_ai, web
     r3 = pipeline.run(web_llm_profile, description="x", declared=declared_missing_ai)
     for r in (report, r2, r3):
         assert render_pdf(r)[:4] == b"%PDF"
+
+
+def test_tiles_are_explained_per_flow(catalog, declared_missing_ai, web_llm_profile):
+    _s, _p, _e, report, _l = _stub_sad_run(catalog)
+    assert "*To verify: Partial controls whose status still needs confirming" in render_markdown(report)
+    r3 = pipeline.run(web_llm_profile, description="x", declared=declared_missing_ai)
+    assert "*To verify: controls whose status is still Unknown" in render_markdown(r3)

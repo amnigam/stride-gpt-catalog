@@ -30,7 +30,7 @@ from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTe
                                 Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, basis_facts, focus_items, document_control, evidence_fields, evidence_groups,
+from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, basis_facts, focus_items, tile_legend, document_control, evidence_fields, evidence_groups,
                      evidence_note, fw_text, out_of_catalog_rows, pci_groups,
                      register_columns, register_rows, sad_banner, sad_facts, stride_label,
                      summary_facts, threat_fw)
@@ -313,7 +313,9 @@ def render_pdf(r: ThreatModelReport) -> bytes:
 
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
-    el.append(Spacer(1, 6))
+    el.append(Spacer(1, 3))
+    el.append(Paragraph(escape(tile_legend(r)), ss["Meta"]))
+    el.append(Spacer(1, 4))
 
     # ---- key focus items: informs the ARB, never directs it ----
     el.extend(_focus_block(r, ss))

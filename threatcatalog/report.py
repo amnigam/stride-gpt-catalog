@@ -731,6 +731,19 @@ def pci_groups(r: ThreatModelReport) -> dict:
             "groups": groups}
 
 
+def tile_legend(r: ThreatModelReport) -> str:
+    """One line under the summary tiles saying what To verify and Reviewed count.
+    Their meaning depends on the flow, so it is spelled out on every report."""
+    if automated(r):
+        return ("To verify: Partial controls whose status still needs confirming, because "
+                "the SAD only implies them, or the cited quote was not found in the SAD or "
+                "does not support the status (already counted under Partial). "
+                "Reviewed: Draft, because no person has reviewed this automated run.")
+    return ("To verify: controls whose status is still Unknown, plus statuses that rest on "
+            "an AI evaluation no reviewer has confirmed. "
+            "Reviewed: controls whose status a reviewer has confirmed or set.")
+
+
 def review_state(r: ThreatModelReport) -> str:
     if automated(r):
         return "Automated draft from the SAD; no person has reviewed the statuses yet"
@@ -843,6 +856,7 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"**Expected** {c['expected']} · **Confirmed in place** {c['implemented']} · "
                f"**Not present** {c['not_present']} · **Partial** {c['partial']} · "
                f"**To verify** {c['to_verify']} · **Reviewed** {reviewed}\n")
+    out.append(f"*{tile_legend(r)}*\n")
 
     # Key focus items: page 1, informs the ARB
     out.extend(_focus_md(r))
