@@ -61,15 +61,15 @@ def action_priority(control_ids: list[str], threat_ids: list[str], gap: list[Gap
                     threats: list[Threat], dread: list[DreadScore]) -> tuple[str, str]:
     """Priority and timing for an action, from the DREAD scores, so the action plan
     agrees with Key focus items. Priority is the worst DREAD priority of the threats
-    that exploit the action's controls (the action's own threat links only when it
-    names no control). Timing is before go-live for Critical, or High on a missing
+    the action closes that exploit its controls (all threats exploiting its controls
+    when it names none of them), so grouping a minor fix with a critical control does
+    not make the whole action Critical. Timing is before go-live for Critical, or High on a missing
     control; otherwise within 90 days."""
     by_threat = {d.threat_id: d for d in dread}
     status = {gi.control.id: gi.status for gi in gap}
-    if control_ids:
-        tids = [t.id for t in threats if set(t.gaps) & set(control_ids)]
-    else:
-        tids = list(threat_ids)
+    linked = [t.id for t in threats if set(t.gaps) & set(control_ids)]
+    own = [x for x in threat_ids if x in linked] if control_ids else list(threat_ids)
+    tids = own or linked
     prios = [by_threat[x].priority.value for x in tids if x in by_threat]
     prio = min(prios, key=lambda p: _PRIO_ORDER.get(p, 9)) if prios else "High"
     missing = any(status.get(c) == ControlStatus.NOT_PRESENT for c in control_ids)

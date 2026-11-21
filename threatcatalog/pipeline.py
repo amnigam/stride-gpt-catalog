@@ -107,6 +107,27 @@ def _cover_actions(actions: list[ActionItem], gap, threats, dread) -> list[Actio
     covered = {c for a in out for c in a.control_ids}
     missing = [gi for gi in findings if gi.control.id not in covered]
     out += default_actions(missing, threats, dread, start=len(out) + 1)
+    return _lift_to_gap_priority(out, findings, threats, dread)
+
+
+def _lift_to_gap_priority(actions, findings, threats, dread):
+    """Each finding's most urgent action must be as urgent as the finding itself
+    (its worst threat), so a Critical gap is never left with only a Medium action."""
+    from .generators import _PRIO_ORDER
+    status = {gi.control.id: gi.status for gi in findings}
+    out = list(actions)
+    for gi in findings:
+        cid = gi.control.id
+        need, _ = action_priority([cid], [], findings, threats, dread)
+        idx = [i for i, a in enumerate(out) if cid in a.control_ids]
+        if not idx:
+            continue
+        best = min(idx, key=lambda i: _PRIO_ORDER.get(out[i].priority, 9))
+        if _PRIO_ORDER.get(out[best].priority, 9) > _PRIO_ORDER[need]:
+            missing = any(status.get(c) == ControlStatus.NOT_PRESENT for c in out[best].control_ids)
+            timing = ("Before go-live" if need == "Critical" or (need == "High" and missing)
+                      else out[best].timing)
+            out[best] = out[best].model_copy(update={"priority": need, "timing": timing})
     return out
 
 

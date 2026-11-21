@@ -429,7 +429,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
                          _priority_cell(sc.priority.value, ss),
                          Paragraph(f'<font size="7.5">{escape(sc.rationale or "—")}</font>',
                                    ss["Cell"])])
-        el.append(_table(rows, [1.3 * cm] + [0.85 * cm] * 5 + [1.1 * cm, 2.0 * cm, 7.85 * cm], ss))
+        el.append(_table(rows, [1.55 * cm] + [0.85 * cm] * 5 + [1.1 * cm, 2.0 * cm, 7.6 * cm], ss))
     else:
         el.append(Paragraph("No scored threats.", ss["Body"]))
 

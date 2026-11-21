@@ -204,6 +204,27 @@ def test_action_priority_follows_dread_not_model_labels(catalog, web_llm_profile
                if a.priority in ("Medium", "Low"))
 
 
+def test_grouped_action_is_not_inflated_but_gap_keeps_its_urgency(
+        catalog, web_llm_profile, declared_missing_ai):
+    from threatcatalog.models import ActionItem
+    base = pipeline.run(web_llm_profile, declared=declared_missing_ai, controls=catalog.controls)
+    hi, lo = base.threats[0], base.threats[1]
+    hc, lc = hi.enabling_gap, lo.enabling_gap
+    dread = [DreadScore(threat_id=t.id, damage=9, reproducibility=9, exploitability=9,
+                        affected_users=9, discoverability=9) if t is hi else
+             DreadScore(threat_id=t.id, damage=4, reproducibility=4, exploitability=4,
+                        affected_users=4, discoverability=4) for t in base.threats]
+    act = lambda tids, cids: ActionItem(id="x", action="Do it", threat_ids=tids, control_ids=cids)
+    # A1 closes the minor threat but also lists the urgent control; A2 handles the urgent one.
+    out = pipeline._cover_actions([act([lo.id], [lc, hc]), act([hi.id], [hc])],
+                                  base.gap_items, base.threats, dread)
+    assert (out[0].priority, out[1].priority) == ("Medium", "Critical")  # no inflation
+    assert out[1].timing == "Before go-live"
+    # Only the grouped action covers the urgent control: it is lifted to match the gap.
+    out = pipeline._cover_actions([act([lo.id], [lc, hc])], base.gap_items, base.threats, dread)
+    assert (out[0].priority, out[0].timing) == ("Critical", "Before go-live")
+
+
 def test_long_exposure_is_cut_at_a_word():
     long = "Suppliers reach the portal over the internet through Front Door " * 15
     a = parse_architecture({"exposure": long, "components": ["x " * 150]})
