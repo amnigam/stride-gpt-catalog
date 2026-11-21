@@ -10,7 +10,13 @@ try:
     JOBS.update(diagrams_b.JOBS)
 except ImportError:
     pass
+import diagrams_c
+JOBS.update(diagrams_c.JOBS)
+# Optional filter: python build_diagrams.py marlowe northfield  (substring of the output path)
+WANT = sys.argv[1:]
 for out, fn in JOBS.items():
+    if WANT and not any(w in out for w in WANT):
+        continue
     out = (HERE / out).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     svg = out.with_suffix(".svg")

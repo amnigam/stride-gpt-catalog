@@ -1,0 +1,22 @@
+Marlowe Shift Reporter — application description
+
+Purpose
+Marlowe Shift Reporter is a small scheduled service for the Harrogate production plant of Marlowe Foods (a fictional food manufacturer). At the end of every shift it reads production counts from the plant's Manufacturing Execution System (MES) database, calculates shift KPIs (output, scrap rate, availability and OEE) and stores them in a reporting database. It replaces a manual spreadsheet. The service has no user interface of its own and exposes no API; plant managers view the results in the existing Power BI Report Server, which is a separate shared platform and out of scope. There are no message queues or file transfers, no AI or machine-learning functionality, and no payment card data.
+
+Users
+About 25 plant managers and shift supervisors read the reports. Two Plant IT administrators run the server. Three planners at Brennan Maintenance, an external contractor, receive a weekly KPI summary by e-mail but have no system access.
+
+Hosting and components
+Everything runs on premises in the Harrogate plant data centre (UK) on VMware; there is no public cloud. The service is a set of Python 3.12 scripts on a Windows Server 2022 virtual machine, started by Windows Task Scheduler at 06:00, 14:00 and 22:00. It reads three read-only views in the existing MES SQL Server database and writes to a new SQL Server 2019 Standard database called SHIFTKPI. Shift summaries are sent through the internal Exchange SMTP relay.
+
+Identity and access
+The service runs as a group managed service account and uses Windows integrated (Kerberos) authentication to both databases, so no passwords are stored. On the MES it can only read the three views; on SHIFTKPI it is currently db_owner. Report readers sign in with their Active Directory accounts and access is granted through an AD group, requested in ServiceNow and recertified quarterly. Administrators use separate admin accounts checked out through CyberArk.
+
+Data protection
+Data is classified Marlowe Internal: production figures and the names of shift supervisors. SQL connections use TLS 1.2, but e-mail to the relay is sent in plain text on port 25. SHIFTKPI does not use Transparent Data Encryption and the server disks are not encrypted. KPI records are deleted after three years, all data stays in the UK, and the test environment uses synthetic MES data. Every MES row is range-checked before use and all SQL statements are parameterised.
+
+Integrations
+The only external party is Brennan Maintenance, which receives a weekly e-mail with line KPIs. A maintenance contract with a confidentiality clause is in place, but no vendor security assessment has been done.
+
+Delivery and operations
+Code is kept in an on-premises Azure DevOps Server Git repository with a peer review branch policy; deployment is a manual copy to the server. Windows and SQL Server are patched monthly through WSUS with critical updates within 14 days, and Qualys scans weekly. The service writes a local log file per run, kept for 30 days and not forwarded; Windows Security events go to Splunk, but there are no alerts for this application. If the MES is unavailable the service retries three times and then e-mails Plant IT, but the report keeps showing the previous shift without saying it is stale. Veeam backs up both servers nightly; a restore has never been tested.
