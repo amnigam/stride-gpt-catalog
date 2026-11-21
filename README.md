@@ -16,8 +16,8 @@ missing.
 
 For a given application it yields, in one pass:
 
-- an **executive summary** (posture, top threats by DREAD, key gaps, strengths) — for leadership;
-- a **control gap register** — every expected control marked implemented / partial / not-present / unknown / N-A;
+- an **executive summary** (posture, one ranked list of top findings by DREAD, strengths) — for leadership;
+- a **findings register** — every expected control that is not present, partial or unknown (controls confirmed in place are listed with their evidence in the appendix); a control the SAD never mentions is marked *Not present (SAD silent)*;
 - a **threat model** (STRIDE) with **DREAD** scoring, **recommendations**, and **mitigations**;
 - a **PCI DSS v4.0.1** exposure view, produced from the same analysis;
 - **framework lineage** on every control — OWASP (Web, **LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8**;
@@ -199,7 +199,7 @@ uv run streamlit run app/streamlit_app.py
    note) are flagged, but nothing blocks the run. Re-running Detect leaves rows you
    touched alone. **Save declaration (JSON)** and load it again later to carry a review
    across sessions or ARB rounds.
-6. **Run**. The gap register gains a **Basis** column (AI not reviewed / AI, reviewer
+6. **Run**. The findings register gains a **Basis** column (AI not reviewed / AI, reviewer
    confirmed / Reviewer override / Reviewer), the executive summary counts statuses that
    rest on unreviewed AI evaluations, and an **evidence appendix** shows one card per
    control (grouped by status, gaps first) with the AI evaluation, cited evidence, AI

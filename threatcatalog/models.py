@@ -459,3 +459,7 @@ class ThreatModelReport(BaseModel):
     sad: Optional[SadContext] = None          # set when the report was generated from a SAD
     diagrams_read: list[str] = Field(default_factory=list)     # main page: diagrams Detect read
     diagrams_skipped: list[str] = Field(default_factory=list)  # main page: uploads not read, and why
+    # document control (set by pipeline.run; optional so older report objects still render)
+    generated_at: Optional[str] = None
+    tool_version: Optional[str] = None
+    catalog_version: Optional[str] = None
