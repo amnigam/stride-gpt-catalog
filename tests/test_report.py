@@ -21,7 +21,7 @@ def _report(declared_missing_ai):
 
 def test_report_has_core_sections(declared_missing_ai):
     md = render_markdown(_report(declared_missing_ai))
-    for heading in ["# Threat Model", "## Control gap register", "## Threat model",
+    for heading in ["# Threat Model", "## Findings register", "## Threat model",
                     "## Recommendations", "## Mitigations", "## DREAD scoring",
                     "## PCI DSS"]:
         assert heading in md
@@ -46,14 +46,15 @@ def test_report_has_executive_summary(declared_missing_ai):
     md = render_markdown(_report(declared_missing_ai))
     assert "## Executive summary" in md
     # summary appears before the gap register
-    assert md.index("## Executive summary") < md.index("## Control gap register")
+    assert md.index("## Executive summary") < md.index("## Findings register")
 
 
 def test_exec_summary_reports_gaps_and_strengths(declared_missing_ai):
     md = render_markdown(_report(declared_missing_ai))
-    assert "Key gaps to close" in md          # AI controls declared not_present
     assert "Strengths (confirmed in place)" in md  # SSO/encryption/TLS/WAF detected
-    assert "Top threats (by DREAD)" in md
+    # one ranked list replaces the old "Top threats" + "Key gaps" pair
+    assert "Top findings (ranked by DREAD)" in md
+    assert "Key gaps to close" not in md and "Top threats (by DREAD)" not in md
 
 
 def test_exec_summary_clean_when_all_confirmed(catalog):

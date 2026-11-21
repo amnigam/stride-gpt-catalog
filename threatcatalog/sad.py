@@ -270,7 +270,8 @@ def build_sad_ledger(expected: list[Control], records: list[dict],
         r = by_id.get(c.id)
         if r is None:
             ev = ControlEvidence(ai_status=ControlStatus.NOT_PRESENT, ai_confidence=Confidence.MEDIUM,
-                                 ai_source="sad", ai_note=NOT_STATED_NOTE, note=NOT_STATED_NOTE)
+                                 ai_source="sad", ai_basis="silent", ai_note=NOT_STATED_NOTE,
+                                 note=NOT_STATED_NOTE)
             out.append(LedgerEntry(control_id=c.id, status=ControlStatus.NOT_PRESENT,
                                    provenance=Provenance.DESCRIPTION, confidence=Confidence.MEDIUM,
                                    evidence=NOT_STATED_NOTE, detail=ev))
@@ -294,7 +295,7 @@ def build_sad_ledger(expected: list[Control], records: list[dict],
         st = ControlStatus(status)
         prov = Provenance.DIAGRAM_VISION if source == "diagram" else Provenance.DESCRIPTION
         ev = ControlEvidence(ai_status=st, ai_confidence=conf, ai_source=source, ai_note=note,
-                             ai_quote=quote, quote_verified=verified, note=note)
+                             ai_basis=basis, ai_quote=quote, quote_verified=verified, note=note)
         out.append(LedgerEntry(control_id=c.id, status=st, provenance=prov, confidence=conf,
                                evidence=note or quote, detail=ev))
     return out

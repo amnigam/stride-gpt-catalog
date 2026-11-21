@@ -23,6 +23,123 @@ _STATUS_LABEL = {
 
 _SOURCE_LABEL = {"description": "description", "diagram": "diagram", "sad": "SAD",
                  "keyword": "description keyword match", "diagram_vision": "diagram"}
+# In a SAD-based report (SAD page, or its declaration loaded on the review page) the
+# text and figures the AI read are the SAD's, even though the rows record them under
+# the generic "description" / "diagram" sources.
+_SAD_SOURCE_LABEL = {"description": "SAD text", "diagram": "SAD diagram",
+                     "diagram_vision": "SAD diagram", "sad": "SAD"}
+
+_STRIDE_LABEL = {"Spoofing": "Spoofing", "Tampering": "Tampering", "Repudiation": "Repudiation",
+                 "InformationDisclosure": "Information disclosure",
+                 "DenialOfService": "Denial of service",
+                 "ElevationOfPrivilege": "Elevation of privilege"}
+
+_FW_LABEL = {"cis_v8": "CIS v8", "owasp_api": "OWASP API", "owasp_asi": "OWASP Agentic",
+             "owasp_llm": "OWASP LLM", "owasp_masvs": "OWASP MASVS", "owasp_mcp": "OWASP MCP",
+             "owasp_mobile": "OWASP Mobile"}
+
+# The SAD rules' note for a control the SAD never mentions (see sad.NOT_STATED_NOTE).
+_SAD_SILENT_PREFIX = "Not stated anywhere in the SAD"
+
+
+def stride_label(s) -> str:
+    """'ElevationOfPrivilege' -> 'Elevation of privilege' (readable, wraps cleanly)."""
+    v = getattr(s, "value", s)
+    return _STRIDE_LABEL.get(v, v)
+
+
+def fw_name(framework: str, ref: str) -> str:
+    """A framework reference with its framework named: 'CIS v8 Control 3'."""
+    name = _FW_LABEL.get(framework, framework.replace("_", " ").upper() if framework else "")
+    return f"{name} {ref}".strip()
+
+
+def fw_labels(control) -> str:
+    return ", ".join(fw_name(f.framework, f.ref) for f in control.threat_frameworks) or "\u2014"
+
+
+def fw_text(s: str) -> str:
+    """'cis_v8:Control 6' (recommendation frameworks) -> 'CIS v8 Control 6'."""
+    fw, sep, ref = str(s).partition(":")
+    return fw_name(fw, ref) if sep else str(s)
+
+
+def threat_fw(r: "ThreatModelReport", t) -> str | None:
+    """A threat's framework reference, named via its enabling control when it matches."""
+    if not t.framework_ref:
+        return None
+    c = next((g.control for g in r.gap_items if g.control.id == t.enabling_gap), None)
+    if c is not None:
+        for f in c.threat_frameworks:
+            if f.ref == t.framework_ref:
+                return fw_name(f.framework, f.ref)
+    return fw_text(t.framework_ref)
+
+
+def clean_quote(q: str | None) -> str | None:
+    """A quote lifted from a SAD table arrives as '| Cell | Cell |'. Show it as
+    'Cell: Cell' so it reads as a sentence (display only; verification used the raw text)."""
+    if not q or q.count("|") < 2:
+        return q
+    cells = [c.strip() for c in q.split("|")]
+    cells = [c for c in cells if c and not set(c) <= set("-: ")]
+    if not cells:
+        return q
+    return cells[0] if len(cells) == 1 else f"{cells[0]}: " + "; ".join(cells[1:])
+
+
+def _ai_kept(gi: GapItem) -> bool:
+    """The final status is still the AI's own (no reviewer override)."""
+    ev = gi.evidence
+    return (ev is not None and ev.ai_status == gi.status
+            and gi.basis != EvidenceBasis.REVIEWER_OVERRIDE)
+
+
+def sad_silent(gi: GapItem) -> bool:
+    """Not present only because the SAD never mentions the control (and no reviewer
+    has changed that status). Declarations saved before `ai_basis` existed are
+    recognised by the SAD rules' note."""
+    if gi.status != ControlStatus.NOT_PRESENT or not _ai_kept(gi):
+        return False
+    ev = gi.evidence
+    if ev.ai_basis is not None:
+        return ev.ai_basis == "silent"
+    return (ev.ai_note or "").startswith(_SAD_SILENT_PREFIX)
+
+
+def sad_inferred(gi: GapItem) -> bool:
+    """Partial because the SAD only implies the control (needs confirming)."""
+    return (gi.status == ControlStatus.PARTIAL and _ai_kept(gi)
+            and gi.evidence.ai_basis == "inferred")
+
+
+def needs_verification(gi: GapItem, auto: bool) -> bool:
+    """Counted under "To verify". In an automated SAD run: partials the SAD only
+    implies, or whose cited quote could not be found or does not back the status.
+    On the review page: unknowns, and statuses still resting on unreviewed AI."""
+    if gi.status == ControlStatus.NOT_APPLICABLE:
+        return False
+    if auto:
+        ev = gi.evidence
+        return gi.status == ControlStatus.PARTIAL and ev is not None and (
+            ev.ai_basis == "inferred" or ev.quote_verified is False or ev.quote_supports is False)
+    return gi.status == ControlStatus.UNKNOWN or gi.basis == EvidenceBasis.AI_UNREVIEWED
+
+
+_REVIEWED = (EvidenceBasis.AI_CONFIRMED, EvidenceBasis.REVIEWER_OVERRIDE,
+             EvidenceBasis.REVIEWER_ONLY)
+
+
+def reviewers(r: "ThreatModelReport") -> list[str]:
+    """Everyone recorded as having reviewed a control, plus the SAD record's reviewer."""
+    names: list[str] = []
+    for g in r.gap_items:
+        who = (g.evidence.reviewer if g.evidence else None) or ""
+        if who.strip() and who.strip() not in names:
+            names.append(who.strip())
+    if r.sad and r.sad.reviewed_by and r.sad.reviewed_by not in names:
+        names.append(r.sad.reviewed_by)
+    return names
 
 
 def _flat(s: str | None) -> str:
@@ -89,7 +206,8 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
             if ev.ai_confidence:
                 parts.append(f"{ev.ai_confidence.value} confidence")
             if ev.ai_source:
-                parts.append("from " + _SOURCE_LABEL.get(ev.ai_source, ev.ai_source))
+                labels = _SAD_SOURCE_LABEL if r.sad is not None else _SOURCE_LABEL
+                parts.append("from " + labels.get(ev.ai_source, ev.ai_source))
             ai = " \u00b7 ".join(parts)
         when = ""
         if ev.reviewed_at:
@@ -102,7 +220,7 @@ def evidence_records(r: ThreatModelReport) -> list[dict]:
             "status": _STATUS_LABEL[gi.status],
             "basis": None if auto else basis_label(gi),
             "ai_evaluation": ai,
-            "quote": _flat(ev.ai_quote) or None,
+            "quote": clean_quote(_flat(ev.ai_quote)) or None,
             "quote_unverified": ev.quote_verified is False,
             "quote_unsupported": (_flat(ev.support_note) or "the quote does not clearly support "
                                   "this status") if ev.quote_supports is False else None,
@@ -185,13 +303,7 @@ def summary_facts(r: ThreatModelReport) -> dict:
     implemented = [g for g in gi if g.status == ControlStatus.IMPLEMENTED]
     n_unknown = sum(1 for g in gi if g.status == ControlStatus.UNKNOWN)
 
-    threats_by_id = {t.id: t for t in r.threats}
-    threat_by_control = {t.enabling_gap: t for t in r.threats if t.enabling_gap}
     dread_by_threat = {d.threat_id: d for d in r.dread}
-
-    def sev(control_id: str) -> float:
-        t = threat_by_control.get(control_id)
-        return dread_by_threat[t.id].average if (t and t.id in dread_by_threat) else 0.0
 
     p = r.profile
 
@@ -208,21 +320,61 @@ def summary_facts(r: ThreatModelReport) -> dict:
         "pci_covered": r.pci_view.covered_count,
     }
 
-    # ---- the headline picks (named, so the summary reads completely on its own) ----
-    top_threats = []
-    for d in sorted(r.dread, key=lambda d: d.average, reverse=True)[:4]:
-        t = threats_by_id.get(d.threat_id)
-        top_threats.append((d.priority.value, d.average,
-                            t.title if t else d.threat_id, t.framework_ref if t else None))
+    # ---- the headline pick: ONE ranked list, so the summary never shows two
+    # "top" lists that disagree. Ranked by DREAD; at equal scores a finding backed by
+    # evidence leads one resting on SAD silence, then missing before partial, then
+    # PCI-exposed first. Falls back to the gap itself when no threat was scored.
+    gap_by_id = {g.control.id: g for g in gi}
+    ranked = []
+    for t in r.threats:
+        g = gap_by_id.get(t.enabling_gap or "")
+        d = dread_by_threat.get(t.id)
+        ranked.append(((-(d.average if d else 0.0),
+                        1 if (g and sad_silent(g)) else 0,   # evidence before SAD silence
+                        0 if (g and g.status == ControlStatus.NOT_PRESENT) else 1,
+                        0 if (g and g.pci_exposed) else 1),
+                       t, g, d))
+    ranked.sort(key=lambda x: x[0])
+    top_findings = []
+    seen: set[str] = set()
+    for _k, t, g, d in ranked:
+        if len(top_findings) == 5:
+            break
+        cid = g.control.id if g else (t.enabling_gap or "")
+        if cid and cid in seen:
+            continue
+        seen.add(cid)
+        tags = (["PCI"] if (g and g.pci_exposed) else []) + \
+               ([fw_name(g.control.threat_frameworks[0].framework, g.control.threat_frameworks[0].ref)]
+                if (g and g.control.threat_frameworks) else [])
+        top_findings.append({"priority": d.priority.value if d else None,
+                             "score": d.average if d else None, "title": t.title,
+                             "control_id": cid, "tags": tags})
+    if not top_findings:
+        for g in sorted(not_present + partial,
+                        key=lambda g: (0 if g.status == ControlStatus.NOT_PRESENT else 1,
+                                       0 if g.pci_exposed else 1))[:5]:
+            verb = "is not in place" if g.status == ControlStatus.NOT_PRESENT else "is only partial"
+            tags = (["PCI"] if g.pci_exposed else []) + \
+                   ([fw_name(g.control.threat_frameworks[0].framework, g.control.threat_frameworks[0].ref)]
+                    if g.control.threat_frameworks else [])
+            top_findings.append({"priority": None, "score": None,
+                                 "title": f"{g.control.title} {verb}",
+                                 "control_id": g.control.id, "tags": tags})
 
-    key_gaps = []
-    for g in sorted(not_present, key=lambda g: (0 if g.pci_exposed else 1, -sev(g.control.id)))[:5]:
-        tags = (["PCI"] if g.pci_exposed else []) + \
-               ([g.control.threat_frameworks[0].ref] if g.control.threat_frameworks else [])
-        key_gaps.append((g.control.id, g.control.title, tags))
-
-    strengths = [(g.control.id, g.control.title) for g in sorted(
-        implemented, key=lambda g: 0 if (g.control.threat_frameworks or g.control.pci) else 1)[:5]]
+    # strengths: required controls first, then PCI-mapped, then framework-mapped
+    # (catalog order otherwise), so the most important protections lead.
+    def _strength_key(g):
+        c = g.control
+        return (0 if c.default_expectation.value == "required" else 1,
+                0 if c.pci else 1, 0 if c.threat_frameworks else 1)
+    strengths = [(g.control.id, g.control.title)
+                 for g in sorted(implemented, key=_strength_key)[:5]]
+    n_silent = sum(1 for g in not_present if sad_silent(g))
+    counts["sad_silent"] = n_silent
+    auto = automated(r)
+    counts["to_verify"] = sum(1 for g in gi if needs_verification(g, auto))
+    counts["reviewed"] = None if auto else sum(1 for g in gi if g.basis in _REVIEWED)
 
     # ---- posture: a short, plain-language narrative (list of paragraphs) ----
     para1 = (f"{_humanize_profile(p)} \u2014 was assessed against the "
@@ -238,10 +390,15 @@ def summary_facts(r: ThreatModelReport) -> dict:
                   f"evidence provided and are flagged for verification \u2014 an unconfirmed "
                   f"control is treated as a question to resolve, not a failure.")
     else:
-        para2 += " Every expected control could be assessed from the evidence provided."
+        para2 += " No control was left as unknown."
+    if n_silent:
+        para2 += (f" {n_silent} of the {counts['not_present']} not-implemented control(s) are "
+                  f"recorded only because the SAD does not mention them; the team can close "
+                  f"these by documenting the control if it exists.")
 
     strong = [title for _, title in strengths[:3]]
-    gapt = [title for _, title, _ in key_gaps[:3]]
+    gapt = [gap_by_id[x["control_id"]].control.title for x in top_findings[:3]
+            if x["control_id"] in gap_by_id]
     strong_phr = (f"Confirmed protections include {_join_natural(strong)}" if strong else "")
     if len(gapt) == 1:
         gap_phr = f"the single most important gap to close is {gapt[0]}"
@@ -287,8 +444,8 @@ def summary_facts(r: ThreatModelReport) -> dict:
         notes.append(f"{n_unknown} unknown control(s) need confirmation \u2014 treated as "
                      f"clarifications, not findings (unknown \u2260 missing)")
 
-    return {"posture": posture, "counts": counts, "top_threats": top_threats,
-            "key_gaps": key_gaps, "strengths": strengths, "notes": notes,
+    return {"posture": posture, "counts": counts, "top_findings": top_findings,
+            "strengths": strengths, "notes": notes,
             "all_confirmed": not (not_present or partial or n_unknown)}
 
 
@@ -298,15 +455,12 @@ def _executive_summary(r: ThreatModelReport) -> list[str]:
     lines = ["## Executive summary\n"]
     for para in f["posture"]:
         lines.append(para + "\n")
-    if f["top_threats"]:
-        lines.append("**Top threats (by DREAD):**")
-        for prio, avg, title, fw in f["top_threats"]:
-            lines.append(f"- [{prio} · {avg}] {title}" + (f" ({fw})" if fw else ""))
-        lines.append("")
-    if f["key_gaps"]:
-        lines.append("**Key gaps to close:**")
-        for cid, title, tags in f["key_gaps"]:
-            lines.append(f"- {cid} {title}" + (f" ({', '.join(tags)})" if tags else ""))
+    if f["top_findings"]:
+        lines.append("**Top findings (ranked by DREAD):**")
+        for x in f["top_findings"]:
+            lead = f"[{x['priority']} · {x['score']}] " if x["priority"] else ""
+            tags = ", ".join([x["control_id"]] + x["tags"]) if x["control_id"] else ", ".join(x["tags"])
+            lines.append(f"- {lead}{x['title']}" + (f" ({tags})" if tags else ""))
         lines.append("")
     if f["strengths"]:
         lines.append("**Strengths (confirmed in place):**")
@@ -347,6 +501,9 @@ def sad_facts(r: ThreatModelReport) -> dict | None:
             ("Engine", sc.engine or "—"),
             ("Profile confirmed by", sc.profile_confirmed_by or "not recorded"),
             ("Generated", sc.generated_at or "—")]
+    if sc.reviewed:
+        src += [("Reviewed on the review page by", ", ".join(reviewers(r)) or "not recorded"),
+                ("Report generated after review", r.generated_at or "—")]
     facets = []
     for f in sc.facets:
         basis = _FACET_SOURCE.get(f.source, f.source) + (" (assumed)" if f.assumed else "")
@@ -395,6 +552,287 @@ def diagrams_line(r: ThreatModelReport) -> str:
     return line
 
 
+# --------------------------------------------------------------------------- #
+# Key focus items (page 1): informs the ARB, never directs it
+# --------------------------------------------------------------------------- #
+FOCUS_NOTE = ("This page summarises the security findings to inform the Architecture Review "
+              "Board. It does not decide the review outcome.")
+FOCUS_LIMIT = 10
+READY, READY_COND, NOT_READY = "Ready", "Ready with conditions", "Not ready"
+
+
+def focus_items(r: ThreatModelReport) -> dict:
+    """The Key focus items, shared by both renderers. Readiness rule (agreed
+    2026-11-22): Not ready if any evidence-backed Critical finding or any PCI-mapped
+    control is Not present; Ready with conditions if any High finding; else Ready.
+    A Critical finding resting only on SAD silence counts as High, and Ready is
+    never shown while any expected control is still Unknown (Ready with conditions)."""
+    auto = automated(r)
+    gap_by_id = {g.control.id: g for g in r.gap_items}
+    dread_by_threat = {d.threat_id: d for d in r.dread}
+    worst: dict[str, tuple] = {}            # control id -> (score, priority, gap)
+    for t in r.threats:
+        g = gap_by_id.get(t.enabling_gap or "")
+        d = dread_by_threat.get(t.id)
+        if g is None or d is None or not g.is_finding:
+            continue
+        if g.control.id not in worst or d.average > worst[g.control.id][0]:
+            worst[g.control.id] = (d.average, d.priority.value, g)
+    ranked = sorted(worst.values(), key=lambda x: (-x[0], 1 if sad_silent(x[2]) else 0))
+
+    critical = [g for _sc, pr, g in ranked if pr == "Critical" and not sad_silent(g)]
+    pci_missing = [g for g in r.gap_items
+                   if g.status == ControlStatus.NOT_PRESENT and g.pci_exposed]
+    high = [g for _sc, pr, g in ranked
+            if pr == "High" or (pr == "Critical" and sad_silent(g))]
+    findings = [g for g in r.gap_items if g.is_finding]
+    unscored = [g for g in findings if g.control.id not in worst]
+
+    reasons = []
+    if critical:
+        reasons.append(f"{len(critical)} evidence-backed Critical finding(s)")
+    if pci_missing:
+        reasons.append(f"{len(pci_missing)} PCI-mapped control(s) not present")
+    unknown = [g for g in r.gap_items if g.status == ControlStatus.UNKNOWN]
+    if critical or pci_missing:
+        readiness = NOT_READY
+    elif high or unscored or unknown:
+        readiness = READY_COND
+        if high:
+            reasons.append(f"{len(high)} High finding(s)")
+        if unscored:
+            reasons.append(f"{len(unscored)} finding(s) without a DREAD score")
+        if unknown:
+            # "Ready" must never be shown while expected controls are unassessed
+            reasons.append(f"{len(unknown)} control(s) not yet assessed")
+    else:
+        readiness = READY
+        reasons.append("no Critical or High findings")
+
+    def item(g, why):
+        return (g.control.id, g.control.title, why)
+
+    before, seen = [], set()
+    for g in critical:
+        if g.control.id not in seen:
+            seen.add(g.control.id)
+            before.append(item(g, f"Critical, {_STATUS_LABEL[g.status].lower()}"))
+    for g in pci_missing:
+        if g.control.id not in seen:
+            seen.add(g.control.id)
+            reqs = ", ".join(x.requirement for x in g.pci_exposed)
+            before.append(item(g, f"PCI {reqs}, not present"))
+    risks = []
+    for g in high:
+        if g.control.id not in seen:
+            seen.add(g.control.id)
+            why = "High" + (", SAD silent" if sad_silent(g) else "")
+            risks.append(item(g, f"{why}, {_STATUS_LABEL[g.status].lower()}"))
+
+    # SAD-silent and inferred rows keep their tag until a reviewer changes the status,
+    # so in a reviewed SAD run (flow 2) the untouched ones are still open questions.
+    questions = [item(g, "the SAD does not mention it") for g in r.gap_items if sad_silent(g)]
+    questions += [item(g, "only implied by the SAD") for g in r.gap_items if sad_inferred(g)]
+    questions += [item(g, "status unknown") for g in unknown]
+
+    def cap(xs):
+        return xs[:FOCUS_LIMIT], max(0, len(xs) - FOCUS_LIMIT)
+
+    names = reviewers(r)
+    prepared = (r.sad.profile_confirmed_by if (r.sad and r.sad.profile_confirmed_by) else "")
+    return {
+        "readiness": readiness, "tag": "Automated draft" if auto else None,
+        "reasons": reasons, "note": FOCUS_NOTE,
+        "before_go_live": cap(before), "business_risks": cap(risks),
+        "open_questions": cap(questions),
+        "people": [("Prepared by", prepared),
+                   ("Reviewed by (AppSec / security champion)", ", ".join(names)),
+                   ("Business risk owner", "")],
+    }
+
+
+def basis_facts(r: ThreatModelReport) -> dict | None:
+    """Assessment basis for a review-page run with no SAD record (flow 3). SAD-based
+    runs use sad_facts()."""
+    if r.sad is not None:
+        return None
+    n_unknown = sum(1 for g in r.gap_items if g.status == ControlStatus.UNKNOWN)
+    rows = [("Description", f"{r.description_words:,} words" if r.description_words
+             else "none provided"),
+            ("Diagrams read", f"{len(r.diagrams_read)}"
+             + (f" ({'; '.join(r.diagrams_read)})" if r.diagrams_read else "")),
+            ("Engine", r.engine or "not recorded"),
+            ("Reviewed by", ", ".join(reviewers(r)) or "no reviewer recorded"),
+            ("Generated", (r.generated_at or "\u2014").replace("T", " ").replace("+00:00", " UTC"))]
+    limits = []
+    if r.diagrams_skipped:
+        limits += [f"Diagram not read: {x}" for x in r.diagrams_skipped]
+    if not r.description_words:
+        limits.append("No written description was provided; statuses rest on the diagrams "
+                      "and the reviewer's declarations only.")
+    if n_unknown:
+        limits.append(f"{n_unknown} control(s) are unknown: they are open questions, not "
+                      f"findings, and are not reflected in the threats or DREAD scores.")
+    limits.append("The description and diagrams were not checked for completeness against the "
+                  "SAD checklist.")
+    return {"rows": rows, "limitations": limits}
+
+
+
+REGISTER_NOTE = ("Controls not present, partial or unknown. Controls confirmed in place are "
+                 "listed with their evidence in the appendix.")
+FINDING_STATUSES = (ControlStatus.NOT_PRESENT, ControlStatus.PARTIAL, ControlStatus.UNKNOWN)
+
+
+def register_rows(r: ThreatModelReport, findings_only: bool) -> list[dict]:
+    """Rows of the findings register (body) or the full control list (appendix),
+    shared by both renderers. Findings are ordered missing, partial, unknown."""
+    items = r.gap_items
+    if findings_only:
+        order = {st: i for i, st in enumerate(FINDING_STATUSES)}
+        items = sorted([g for g in items if g.status in order], key=lambda g: order[g.status])
+    rows = []
+    for g in items:
+        status = _STATUS_LABEL[g.status] + (" (SAD silent)" if sad_silent(g) else
+                                            " (inferred)" if sad_inferred(g) else "")
+        rows.append({"control": f"{g.control.id} {g.control.title}", "status_enum": g.status,
+                     "status": status, "basis": basis_label(g),
+                     "frameworks": fw_labels(g.control),
+                     "pci": ", ".join(x.requirement for x in g.pci_exposed) or "\u2014"})
+    return rows
+
+
+def register_columns(r: ThreatModelReport) -> tuple[bool, bool]:
+    """(show Basis, show PCI). Basis is dropped in an automated SAD run (the AI is
+    every row's basis); the PCI column only appears when PCI is in scope."""
+    return (not automated(r), r.pci_view.in_scope)
+
+
+def _req_key(req: str):
+    return tuple(int(x) if x.isdigit() else x for x in str(req).replace("-", ".").split("."))
+
+
+def pci_groups(r: ThreatModelReport) -> dict:
+    """PCI view grouped by requirement number: {'counts': {...}, 'groups':
+    [(requirement, [(control_id, title, status_label, kind), ...]), ...]} where kind is
+    'exposed' or 'verify'."""
+    v = r.pci_view
+    by_req: dict[str, list] = {}
+    for kind, entries in (("exposed", v.exposed), ("verify", v.indeterminate)):
+        for e in entries:
+            label = _STATUS_LABEL[e.status]
+            for q in e.requirements:
+                by_req.setdefault(q.requirement, []).append((e.control_id, e.control_title,
+                                                             label, kind))
+    groups = [(req, by_req[req]) for req in sorted(by_req, key=_req_key)]
+    return {"counts": {"mapped": len(v.exposed) + len(v.indeterminate) + v.covered_count,
+                       "exposed": len(v.exposed), "verify": len(v.indeterminate),
+                       "in_place": v.covered_count},
+            "groups": groups}
+
+
+def tile_legend(r: ThreatModelReport) -> str:
+    """One line under the summary tiles saying what To verify and Reviewed count.
+    Their meaning depends on the flow, so it is spelled out on every report."""
+    if automated(r):
+        return ("To verify: Partial controls whose status still needs confirming, because "
+                "the SAD only implies them, or the cited quote was not found in the SAD or "
+                "does not support the status (already counted under Partial). "
+                "Reviewed: Draft, because no person has reviewed this automated run.")
+    return ("To verify: controls whose status is still Unknown, plus statuses that rest on "
+            "an AI evaluation no reviewer has confirmed. "
+            "Reviewed: controls whose status a reviewer has confirmed or set.")
+
+
+def review_state(r: ThreatModelReport) -> str:
+    if automated(r):
+        return "Automated draft from the SAD; no person has reviewed the statuses yet"
+    n = sum(1 for g in r.gap_items if g.basis in _REVIEWED)
+    names = reviewers(r)
+    who = f" ({', '.join(names)})" if names else ""
+    return f"{n} of {r.resolved_control_count} control statuses confirmed by a reviewer{who}"
+
+
+def document_control(r: ThreatModelReport) -> list[tuple[str, str]]:
+    """Document-control rows for the top of the report."""
+    rows = []
+    if r.generated_at:
+        rows.append(("Generated", r.generated_at.replace("T", " ").replace("+00:00", " UTC")))
+    rows.append(("Review state", review_state(r)))
+    if r.tool_version:
+        rows.append(("Tool version", r.tool_version))
+    if r.catalog_version:
+        rows.append(("Catalog", r.catalog_version))
+    return rows
+
+
+def out_of_catalog_rows(r: ThreatModelReport) -> list[str]:
+    """Plain sentences for compensating controls and catalog candidates."""
+    out = []
+    for a in r.compensating:
+        st = ", ".join(stride_label(x) for x in a.stride)
+        out.append(f"Compensating: {a.observed.name}" + (f" (addresses {st})" if st else "")
+                   + f". {a.rationale} It softens, but does not close, the related findings.")
+    for c in r.candidates:
+        st = ", ".join(stride_label(x) for x in c.stride)
+        risk = (f"addresses {st} risk" if st else
+                "the risk it addresses is not mapped to STRIDE yet")
+        out.append(f"Candidate: {c.title} ({risk}). Described in the evidence but not in the "
+                   f"catalog; it does not offset any finding in this report.")
+    return out
+
+
+
+def _register_md(r: ThreatModelReport, rows: list[dict]) -> list[str]:
+    show_basis, show_pci = register_columns(r)
+    out = ["| Control | Status |" + (" Basis |" if show_basis else "") + " Frameworks |"
+           + (" PCI exposed |" if show_pci else ""),
+           "|---|---|" + ("---|" if show_basis else "") + "---|" + ("---|" if show_pci else "")]
+    for x in rows:
+        out.append(f"| {x['control']} | {x['status']} |"
+                   + (f" {x['basis']} |" if show_basis else "") + f" {x['frameworks']} |"
+                   + (f" {x['pci']} |" if show_pci else ""))
+    return out
+
+
+def _focus_md(r: ThreatModelReport) -> list[str]:
+    f = focus_items(r)
+    tag = f" ({f['tag']})" if f["tag"] else ""
+    out = ["## Key focus items\n", f"*{f['note']}*\n",
+           f"**Security readiness: {f['readiness']}**{tag} — {'; '.join(f['reasons'])}.\n"]
+    for key, title in (("before_go_live", "Address before go-live"),
+                       ("business_risks", "Risks for the business to consider"),
+                       ("open_questions", "Open questions for the team")):
+        items, more = f[key]
+        if not items:
+            continue
+        out.append(f"**{title}:**")
+        out += [f"- {cid} {_md(t)} — {_md(why)}" for cid, t, why in items]
+        if more:
+            out.append(f"- …and {more} more (see the findings register)")
+        out.append("")
+    out.append("| Role | Name | Date |")
+    out.append("|---|---|---|")
+    out += [f"| {role} | {_cell(name) if name else ''} | |" for role, name in f["people"]]
+    out.append("")
+    return out
+
+
+def _basis_md(r: ThreatModelReport) -> list[str]:
+    b = basis_facts(r)
+    if b is None:
+        return []
+    out = ["## Assessment basis\n"]
+    out += [f"*{k}:* {_md(v)}  " for k, v in b["rows"]]
+    out.append("")
+    if r.diagrams_read or r.diagrams_skipped:
+        out.append(diagrams_line(r) + "\n")
+    out.append("### Limitations of this assessment\n")
+    out += [f"- {_md(x)}" for x in b["limitations"]]
+    out.append("")
+    return out
+
+
 def render_markdown(r: ThreatModelReport) -> str:
     p = r.profile
     out: list[str] = []
@@ -402,33 +840,42 @@ def render_markdown(r: ThreatModelReport) -> str:
     out.append(f"*Platforms:* {', '.join(f.value for f in p.platforms)}  ")
     out.append(f"*AI capability:* {', '.join(a.value for a in p.ai_capabilities)}  ")
     out.append(f"*Data classification:* {p.data_classification.value}  ")
-    out.append(f"*Resolved controls:* {r.resolved_control_count}  ")
+    out.append(f"*Expected controls:* {r.resolved_control_count}  ")
     out.append(f"*PCI in scope:* {'yes' if p.handles_cardholder_data else 'no'}\n")
-    if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
-        out.append(diagrams_line(r) + "\n")
+    dc = document_control(r)
+    if dc:
+        out.append("  \n".join(f"*{k}:* {_md(v)}" for k, v in dc) + "\n")
     banner = sad_banner(r)
     if banner:
         out.append(f"> **{banner[0]}** {banner[1]}\n")
 
+    # Headline counts (same numbers as the PDF stat strip)
+    c = summary_facts(r)["counts"]
+    reviewed = ("Automated draft" if c["reviewed"] is None
+                else f"{c['reviewed']} of {c['expected']}")
+    out.append(f"**Expected** {c['expected']} · **Confirmed in place** {c['implemented']} · "
+               f"**Not present** {c['not_present']} · **Partial** {c['partial']} · "
+               f"**To verify** {c['to_verify']} · **Reviewed** {reviewed}\n")
+    out.append(f"*{tile_legend(r)}*\n")
+
+    # Key focus items: page 1, informs the ARB
+    out.extend(_focus_md(r))
+
     # Executive summary — deterministic roll-up, first thing a reader sees
     out.extend(_executive_summary(r))
 
-    # SAD assessment basis (SAD-driven runs only)
+    # Assessment basis: the SAD record, or what a review-page run was built from
     out.extend(_sad_section_md(r))
+    out.extend(_basis_md(r))
 
-    # Gap register
-    out.append("## Control gap register\n")
-    # Basis says who stands behind a status; in an automated SAD run it is the AI
-    # for every row, so the column is dropped there.
-    show_basis = not automated(r)
-    out.append("| Control | Status |" + (" Basis |" if show_basis else "") + " Frameworks | PCI exposed |")
-    out.append("|---|---|" + ("---|" if show_basis else "") + "---|---|")
-    for gi in r.gap_items:
-        fws = ", ".join(f.ref for f in gi.control.threat_frameworks) or "—"
-        pci = ", ".join(x.requirement for x in gi.pci_exposed) or "—"
-        basis = f" {basis_label(gi)} |" if show_basis else ""
-        out.append(f"| {gi.control.id} {gi.control.title} | {_STATUS_LABEL[gi.status]} |"
-                   f"{basis} {fws} | {pci} |")
+    # Findings register: gaps and unknowns only; the full list is in the appendix
+    out.append("## Findings register\n")
+    out.append(f"*{REGISTER_NOTE}*\n")
+    rows = register_rows(r, findings_only=True)
+    if rows:
+        out.extend(_register_md(r, rows))
+    else:
+        out.append("*No findings — every expected control is confirmed in place.*")
     out.append("")
 
     # Threats
@@ -437,8 +884,8 @@ def render_markdown(r: ThreatModelReport) -> str:
         out.append("| ID | STRIDE | Threat | Enabling gap | Maps to |")
         out.append("|---|---|---|---|---|")
         for t in r.threats:
-            out.append(f"| {t.id} | {t.stride.value} | {t.title} "
-                       f"| {t.enabling_gap or '—'} | {t.framework_ref or '—'} |")
+            out.append(f"| {t.id} | {stride_label(t.stride)} | {t.title} "
+                       f"| {t.enabling_gap or '—'} | {threat_fw(r, t) or '—'} |")
     else:
         out.append("*No findings — all expected controls implemented or unknown.*")
     out.append("")
@@ -446,7 +893,7 @@ def render_markdown(r: ThreatModelReport) -> str:
     # Recommendations
     out.append("## Recommendations (gap-closing)\n")
     for rec in r.recommendations:
-        fw = f"  _{', '.join(rec.frameworks)}_" if rec.frameworks else ""
+        fw = f"  _{', '.join(fw_text(x) for x in rec.frameworks)}_" if rec.frameworks else ""
         out.append(f"- **{rec.title}** ({rec.control_id}) — {rec.action}{fw}")
     if not r.recommendations:
         out.append("- None.")
@@ -477,42 +924,36 @@ def render_markdown(r: ThreatModelReport) -> str:
     # Clarifications
     if r.clarifications:
         out.append("## Clarifications needed (unknown ≠ missing)\n")
-        for c in r.clarifications:
-            out.append(f"- {c}")
+        for cl in r.clarifications:
+            out.append(f"- {cl}")
         out.append("")
 
-    # PCI view
+    # PCI view, grouped by requirement
     out.append("## PCI DSS v4.0.1 compliance view\n")
     if not r.pci_view.in_scope:
         out.append("*Not in scope — the application does not handle cardholder data.*\n")
     else:
-        out.append(f"In scope. Covered PCI-mapped controls: {r.pci_view.covered_count}.\n")
-        if r.pci_view.exposed:
-            out.append("**Exposed (weak/missing):**")
-            for e in r.pci_view.exposed:
-                reqs = ", ".join(x.requirement for x in e.requirements)
-                out.append(f"- {e.control_id} {e.control_title} "
-                           f"({_STATUS_LABEL[e.status]}) → PCI {reqs}")
-        if r.pci_view.indeterminate:
-            out.append("\n**Indeterminate (verify):**")
-            for e in r.pci_view.indeterminate:
-                reqs = ", ".join(x.requirement for x in e.requirements)
-                out.append(f"- {e.control_id} {e.control_title} → PCI {reqs}")
+        pg = pci_groups(r)
+        k = pg["counts"]
+        out.append(f"In scope. {k['mapped']} PCI-mapped control(s) expected: {k['exposed']} "
+                   f"exposed, {k['verify']} to verify, {k['in_place']} in place.\n")
+        if pg["groups"]:
+            out.append("| PCI requirement | Control | Status |")
+            out.append("|---|---|---|")
+            for req, items in pg["groups"]:
+                for cid, title, label, kind in items:
+                    st = label if kind == "exposed" else f"{label} (verify)"
+                    out.append(f"| {req} | {cid} {title} | {st} |")
         out.append("")
 
     # Out-of-catalog
-    if r.compensating or r.candidates:
+    ooc = out_of_catalog_rows(r)
+    if ooc:
         out.append("## Out-of-catalog controls\n")
-        for a in r.compensating:
-            out.append(f"- Compensating: **{a.observed.name}** — {a.rationale}")
-        if r.candidates:
-            out.append("\n*Catalog candidates (flagged for later promotion):*")
-            for c in r.candidates:
-                strides = ", ".join(s.value for s in c.stride) or "unmapped"
-                out.append(f"- {c.title} — [{strides}]")
+        out += [f"- {_md(x)}" for x in ooc]
         out.append("")
 
-    # Evidence appendix — one card per control, grouped by status, findings first
+    # Evidence appendix: one card per control, so every expected control is listed there
     out.extend(_evidence_md(r))
 
     return "\n".join(out)

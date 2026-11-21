@@ -217,6 +217,10 @@ class ControlEvidence(BaseModel):
     ai_note: Optional[str] = None            # the AI's rationale, as first written
     ai_quote: Optional[str] = None           # verbatim excerpt / diagram element cited
     quote_verified: Optional[bool] = None    # description quotes are checked against the text
+    # what the AI's status rests on in a SAD run: "stated" in the SAD, "inferred" from it,
+    # or "silent" (the SAD never mentions the control). None outside SAD runs and in
+    # declarations saved before this field existed (the report falls back to the note).
+    ai_basis: Optional[str] = None
     # second-opinion check (same model): does the cited quote actually back ai_status?
     # False flags the row for the reviewer; it never changes the status
     quote_supports: Optional[bool] = None
@@ -459,3 +463,10 @@ class ThreatModelReport(BaseModel):
     sad: Optional[SadContext] = None          # set when the report was generated from a SAD
     diagrams_read: list[str] = Field(default_factory=list)     # main page: diagrams Detect read
     diagrams_skipped: list[str] = Field(default_factory=list)  # main page: uploads not read, and why
+    # document control (set by pipeline.run; optional so older report objects still render)
+    generated_at: Optional[str] = None
+    tool_version: Optional[str] = None
+    catalog_version: Optional[str] = None
+    # assessment basis for review-page runs (the SAD record covers SAD runs)
+    description_words: Optional[int] = None
+    engine: Optional[str] = None

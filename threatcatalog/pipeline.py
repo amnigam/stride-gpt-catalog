@@ -15,6 +15,10 @@ computed deterministically either way.
 
 from __future__ import annotations
 
+import hashlib
+from datetime import datetime, timezone
+
+from . import __version__
 from .catalog import Catalog, resolve
 from .gap import build_gap
 from .generators import ArtifactEngine, DeterministicArtifactEngine
@@ -33,6 +37,13 @@ def _clarifications(gap) -> list[str]:
                                   0 if gi.control.default_expectation.value == "required" else 1))
     return [f"Confirm whether '{gi.control.title}' is implemented "
             f"({gi.control.assessment_signal})" for gi in unknowns]
+
+
+def catalog_version(controls: list[Control]) -> str:
+    """'123 controls · 1a2b3c4d': a stable fingerprint of the catalog content used,
+    so two reports can be told apart when the catalog changed between them."""
+    blob = "\n".join(c.model_dump_json() for c in sorted(controls, key=lambda c: c.id))
+    return f"{len(controls)} controls \u00b7 {hashlib.sha256(blob.encode()).hexdigest()[:8]}"
 
 
 def run(profile: AppProfile,
@@ -76,4 +87,7 @@ def run(profile: AppProfile,
         clarifications=_clarifications(gap), threats=threats,
         recommendations=recommendations, mitigations=mitigations, dread=dread,
         pci_view=pci_view, candidates=candidates,
-        compensating=[a for a in assessments if a.relevant and a.compensating])
+        compensating=[a for a in assessments if a.relevant and a.compensating],
+        generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        tool_version=__version__, catalog_version=catalog_version(controls),
+        description_words=len(description.split()) if description else 0)

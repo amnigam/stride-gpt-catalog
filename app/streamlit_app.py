@@ -486,6 +486,8 @@ if st.button("Run threat model", type="primary"):
                                               st.session_state.get("reviewer"))
         report.diagrams_read = list(st.session_state.get("_diagrams_read") or [])
         report.diagrams_skipped = list(st.session_state.get("_diagrams_skipped") or [])
+        report.engine = (engine_choice if engine_choice == "Deterministic (offline)"
+                         else f"{engine_choice} · {model_id}")
     except Exception as exc:                       # noqa: BLE001
         st.error(f"Run failed with {engine_choice}: {exc}")
         st.stop()

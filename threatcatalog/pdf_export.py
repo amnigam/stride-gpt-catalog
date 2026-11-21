@@ -30,9 +30,10 @@ from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTe
                                 Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import (_STATUS_LABEL, EVIDENCE_TITLE, basis_label, evidence_fields,
-                     automated, evidence_groups, evidence_note, sad_banner,
-                     sad_facts, summary_facts)
+from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, basis_facts, focus_items, tile_legend, document_control, evidence_fields, evidence_groups,
+                     evidence_note, fw_text, out_of_catalog_rows, pci_groups,
+                     register_columns, register_rows, sad_banner, sad_facts, stride_label,
+                     summary_facts, threat_fw)
 
 # ---- palette ----
 _NAVY = colors.HexColor("#1f2c4c")
@@ -189,10 +190,9 @@ def _evidence_card(rec, ss):
     return t
 
 
-def _status_cell(status, ss):
+def _status_cell(status, ss, label):
     col = _STATUS_COLOR.get(status, _GREY)
-    return Paragraph(f'<font color="{col.hexval()}"><b>{escape(_STATUS_LABEL[status])}</b></font>',
-                     ss["Cell"])
+    return Paragraph(f'<font color="{col.hexval()}"><b>{escape(label)}</b></font>', ss["Cell"])
 
 
 def _priority_cell(priority, ss):
@@ -201,12 +201,16 @@ def _priority_cell(priority, ss):
 
 
 def _stat_strip(counts, ss):
-    """A compact, colour-coded summary band: expected / in place / gaps / to verify."""
+    """A compact, colour-coded summary band: expected / in place / not present /
+    partial / to verify."""
     spec = [
         ("Expected", counts["expected"], _NAVY, _BAND),
         ("Confirmed in place", counts["implemented"], _GREEN, colors.HexColor("#e6f6ef")),
-        ("Gaps", counts["gaps"], _RED, colors.HexColor("#fbeae9")),
-        ("To verify", counts["unknown"], _GREY, _BAND),
+        ("Not present", counts["not_present"], _RED, colors.HexColor("#fbeae9")),
+        ("Partial", counts["partial"], _AMBER, colors.HexColor("#fdf3e7")),
+        ("To verify", counts["to_verify"], _GREY, _BAND),
+        ("Reviewed", "Draft" if counts["reviewed"] is None
+         else f"{counts['reviewed']}/{counts['expected']}", _NAVY, _BAND),
     ]
     cells = []
     for label, num, col, _bg in spec:
@@ -214,7 +218,7 @@ def _stat_strip(counts, ss):
             f'<font size="15" color="{col.hexval()}"><b>{num}</b></font><br/>'
             f'<font size="7.5" color="{_GREY.hexval()}">{escape(label)}</font>',
             ss["StatNum"]))
-    t = Table([cells], colWidths=[4.35 * cm] * 4)
+    t = Table([cells], colWidths=[2.9 * cm] * len(spec))
     style = [("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
              ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -223,6 +227,60 @@ def _stat_strip(counts, ss):
         style.append(("BACKGROUND", (i, 0), (i, 0), bg))
     t.setStyle(TableStyle(style))
     return t
+
+
+_READY_COLOR = {"Ready": _GREEN, "Ready with conditions": _AMBER, "Not ready": _RED}
+
+
+def _focus_block(r, ss):
+    f = focus_items(r)
+    col = _READY_COLOR.get(f["readiness"], _GREY)
+    el = [Paragraph("Key focus items", ss["H2"]),
+          Paragraph(f'<font color="{_GREY.hexval()}">{escape(f["note"])}</font>', ss["Body"])]
+    tag = (f' &nbsp;<font color="{_AMBER.hexval()}"><b>{escape(f["tag"])}</b></font>'
+           if f["tag"] else "")
+    marker = Table([[Paragraph(
+        f'<font color="{col.hexval()}"><b>Security readiness: {escape(f["readiness"])}</b>'
+        f'</font>{tag}<br/><font size="8" color="{_GREY.hexval()}">'
+        f'{escape("; ".join(f["reasons"]).capitalize())}</font>', ss["Body"])]],
+        colWidths=[_CARD_W])
+    marker.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _BAND), ("LINEBEFORE", (0, 0), (0, -1), 3.5, col),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9)]))
+    el.append(marker)
+    for key, title in (("before_go_live", "Address before go-live"),
+                       ("business_risks", "Risks for the business to consider"),
+                       ("open_questions", "Open questions for the team")):
+        items, more = f[key]
+        if not items:
+            continue
+        el.append(Paragraph(title, ss["Lead"]))
+        for cid, t, why in items:
+            el.append(Paragraph(f"<b>{escape(cid)}</b> {escape(t)} "
+                                f'<font color="{_GREY.hexval()}">({escape(why)})</font>',
+                                ss["Bull"], bulletText="\u2022"))
+        if more:
+            el.append(Paragraph(f"…and {more} more (see the findings register)", ss["Bull"],
+                                bulletText="\u2022"))
+    el.append(Spacer(1, 4))
+    el.append(_table([["Role", "Name", "Date"]] + [[role, name, ""] for role, name in f["people"]],
+                     [6.0 * cm, 7.5 * cm, 3.0 * cm], ss))
+    return el
+
+
+def _register_table(r, rows, ss):
+    show_basis, show_pci = register_columns(r)
+    head = (["Control", "Status"] + (["Basis"] if show_basis else []) + ["Frameworks"]
+            + (["PCI exposed"] if show_pci else []))
+    data = [head]
+    for x in rows:
+        data.append([x["control"], _status_cell(x["status_enum"], ss, x["status"])]
+                    + ([x["basis"]] if show_basis else []) + [x["frameworks"]]
+                    + ([x["pci"]] if show_pci else []))
+    widths = {(True, True): [5.0, 2.5, 2.8, 3.6, 2.6], (True, False): [6.2, 2.5, 3.2, 4.6],
+              (False, True): [6.2, 2.5, 4.6, 3.2], (False, False): [7.6, 2.5, 6.4]}
+    return _table(data, [w * cm for w in widths[(show_basis, show_pci)]], ss)
 
 
 def render_pdf(r: ThreatModelReport) -> bytes:
@@ -243,12 +301,10 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         f"Data: {p.data_classification.value} &nbsp;|&nbsp; "
         f"Expected controls: {r.resolved_control_count} &nbsp;|&nbsp; "
         f"PCI in scope: {'yes' if p.handles_cardholder_data else 'no'}", ss["Meta"]))
-    if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
-        read = "; ".join(f"Diagram {i + 1}: {d}" for i, d in enumerate(r.diagrams_read)) or "none"
-        txt = escape(f"Diagrams read ({len(r.diagrams_read)}): {read}")
-        if r.diagrams_skipped:
-            txt += " &nbsp;|&nbsp; " + escape("Not read: " + "; ".join(r.diagrams_skipped))
-        el.append(Paragraph(txt, ss["Meta"]))
+    dc = document_control(r)
+    if dc:
+        el.append(Paragraph(" &nbsp;|&nbsp; ".join(f"{escape(k)}: {escape(v)}" for k, v in dc),
+                            ss["Meta"]))
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
     banner = sad_banner(r)
     if banner is not None:
@@ -257,28 +313,30 @@ def render_pdf(r: ThreatModelReport) -> bytes:
 
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
-    el.append(Spacer(1, 6))
+    el.append(Spacer(1, 3))
+    el.append(Paragraph(escape(tile_legend(r)), ss["Meta"]))
+    el.append(Spacer(1, 4))
+
+    # ---- key focus items: informs the ARB, never directs it ----
+    el.extend(_focus_block(r, ss))
 
     # ---- executive summary (narrative paragraphs) ----
     el.append(Paragraph("Executive summary", ss["H2"]))
     for para in f["posture"]:
         el.append(Paragraph(escape(para), ss["Body"]))
 
-    if f["top_threats"]:
-        el.append(Paragraph("Top threats (by DREAD)", ss["Lead"]))
-        for prio, avg, title, fw in f["top_threats"]:
-            col = _PRIORITY.get(prio, _GREY)
-            tag = f" ({escape(fw)})" if fw else ""
-            el.append(Paragraph(
-                f'<font color="{col.hexval()}"><b>[{prio} &middot; {avg}]</b></font> '
-                f'{escape(title)}{tag}', ss["Bull"], bulletText="\u2022"))
-
-    if f["key_gaps"]:
-        el.append(Paragraph("Key gaps to close", ss["Lead"]))
-        for cid, title, tags in f["key_gaps"]:
+    if f["top_findings"]:
+        el.append(Paragraph("Top findings (ranked by DREAD)", ss["Lead"]))
+        for x in f["top_findings"]:
+            lead = ""
+            if x["priority"]:
+                col = _PRIORITY.get(x["priority"], _GREY)
+                lead = (f'<font color="{col.hexval()}"><b>[{escape(x["priority"])} &middot; '
+                        f'{x["score"]}]</b></font> ')
+            tags = [x["control_id"]] if x["control_id"] else []
+            tags += x["tags"]
             tg = f' <font color="{_GREY.hexval()}">({escape(", ".join(tags))})</font>' if tags else ""
-            el.append(Paragraph(f'<b>{escape(cid)}</b> {escape(title)}{tg}', ss["Bull"],
-                                bulletText="\u2022"))
+            el.append(Paragraph(f"{lead}{escape(x['title'])}{tg}", ss["Bull"], bulletText="\u2022"))
 
     if f["strengths"]:
         el.append(Paragraph("Strengths (confirmed in place)", ss["Lead"]))
@@ -313,33 +371,43 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             for x in sf["limitations"]:
                 el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
 
-    # ---- gap register (colour-coded status) ----
-    el.append(Paragraph("Control gap register", ss["H2"]))
-    show_basis = not automated(r)   # automated SAD run: the AI is the basis of every row
-    rows = [["Control", "Status"] + (["Basis"] if show_basis else []) + ["Frameworks", "PCI exposed"]]
-    for gi in r.gap_items:
-        fws = ", ".join(x.ref for x in gi.control.threat_frameworks) or "\u2014"
-        pci = ", ".join(x.requirement for x in gi.pci_exposed) or "\u2014"
-        rows.append([f"{gi.control.id}  {gi.control.title}", _status_cell(gi.status, ss)]
-                    + ([basis_label(gi)] if show_basis else []) + [fws, pci])
-    widths = ([5.4, 2.1, 2.8, 3.6, 2.6] if show_basis else [6.6, 2.1, 4.6, 3.2])
-    el.append(_table(rows, [w * cm for w in widths], ss))
+    # ---- assessment basis for a review-page run with no SAD ----
+    bf = basis_facts(r)
+    if bf is not None:
+        el.append(Paragraph("Assessment basis", ss["H2"]))
+        el.append(_table([["Item", "Value"]] + [list(x) for x in bf["rows"]],
+                         [4.0 * cm, 12.5 * cm], ss))
+        if r.diagrams_skipped:
+            el.append(Paragraph(escape("Not read: " + "; ".join(r.diagrams_skipped)), ss["Meta"]))
+        el.append(Paragraph("Limitations of this assessment", ss["Lead"]))
+        for x in bf["limitations"]:
+            el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
+
+    # ---- findings register (gaps + unknowns; the full list is in the appendix) ----
+    el.append(Paragraph("Findings register", ss["H2"]))
+    el.append(Paragraph(f'<font color="{_GREY.hexval()}">{escape(REGISTER_NOTE)}</font>', ss["Body"]))
+    rows = register_rows(r, findings_only=True)
+    if rows:
+        el.append(_register_table(r, rows, ss))
+    else:
+        el.append(Paragraph("No findings — every expected control is confirmed in place.",
+                            ss["Body"]))
 
     # ---- threats ----
     el.append(Paragraph("Threat model", ss["H2"]))
     if r.threats:
         rows = [["ID", "STRIDE", "Threat", "Gap", "Maps to"]]
         for t in r.threats:
-            rows.append([t.id, t.stride.value, t.title, t.enabling_gap or "\u2014",
-                         t.framework_ref or "\u2014"])
-        el.append(_table(rows, [1.1 * cm, 2.4 * cm, 7.4 * cm, 2.9 * cm, 2.7 * cm], ss))
+            rows.append([t.id, stride_label(t.stride), t.title, t.enabling_gap or "\u2014",
+                         threat_fw(r, t) or "\u2014"])
+        el.append(_table(rows, [1.1 * cm, 2.5 * cm, 6.5 * cm, 3.4 * cm, 3.0 * cm], ss))
     else:
         el.append(Paragraph("No findings — all expected controls implemented or unknown.", ss["Body"]))
 
     # ---- recommendations ----
     el.append(Paragraph("Recommendations (gap-closing)", ss["H2"]))
     for rec in r.recommendations:
-        fw = f' <i><font color="{_GREY.hexval()}">[{escape(", ".join(rec.frameworks))}]</font></i>' if rec.frameworks else ""
+        fw = f' <i><font color="{_GREY.hexval()}">[{escape(", ".join(fw_text(x) for x in rec.frameworks))}]</font></i>' if rec.frameworks else ""
         el.append(Paragraph(f"<b>{escape(rec.title)}</b> ({escape(rec.control_id)}) — "
                             f"{escape(rec.action)}{fw}", ss["Bull"], bulletText="\u2022"))
     if not r.recommendations:
@@ -378,30 +446,28 @@ def render_pdf(r: ThreatModelReport) -> bytes:
     if not r.pci_view.in_scope:
         el.append(Paragraph("Not in scope — the application does not handle cardholder data.", ss["Body"]))
     else:
-        el.append(Paragraph(f"In scope. Covered PCI-mapped controls: {r.pci_view.covered_count}.",
-                            ss["Body"]))
-        for e in r.pci_view.exposed:
-            reqs = ", ".join(x.requirement for x in e.requirements)
-            el.append(Paragraph(
-                f'<font color="{_RED.hexval()}"><b>Exposed:</b></font> {escape(e.control_id)} '
-                f"{escape(e.control_title)} ({_STATUS_LABEL[e.status]}) &rarr; PCI {reqs}",
-                ss["Bull"], bulletText="\u2022"))
-        for e in r.pci_view.indeterminate:
-            reqs = ", ".join(x.requirement for x in e.requirements)
-            el.append(Paragraph(
-                f'<font color="{_GREY.hexval()}"><b>Verify:</b></font> {escape(e.control_id)} '
-                f"{escape(e.control_title)} &rarr; PCI {reqs}", ss["Bull"], bulletText="\u2022"))
+        pg = pci_groups(r)
+        k = pg["counts"]
+        el.append(Paragraph(
+            f"In scope. {k['mapped']} PCI-mapped control(s) expected: {k['exposed']} exposed, "
+            f"{k['verify']} to verify, {k['in_place']} in place.", ss["Body"]))
+        if pg["groups"]:
+            prow = [["PCI requirement", "Control", "Status"]]
+            for req, items in pg["groups"]:
+                for cid, title, label, kind in items:
+                    col = _RED if kind == "exposed" else _GREY
+                    st = label if kind == "exposed" else f"{label} (verify)"
+                    prow.append([req, f"{cid}  {title}",
+                                 Paragraph(f'<font color="{col.hexval()}"><b>{escape(st)}</b></font>',
+                                           ss["Cell"])])
+            el.append(_table(prow, [3.0 * cm, 10.5 * cm, 3.0 * cm], ss))
 
     # ---- out-of-catalog ----
-    if r.compensating or r.candidates:
+    ooc = out_of_catalog_rows(r)
+    if ooc:
         el.append(Paragraph("Out-of-catalog controls", ss["H2"]))
-        for a in r.compensating:
-            el.append(Paragraph(f"Compensating: <b>{escape(a.observed.name)}</b> — "
-                                f"{escape(a.rationale)}", ss["Bull"], bulletText="\u2022"))
-        for c in r.candidates:
-            strides = ", ".join(s.value for s in c.stride) or "unmapped"
-            el.append(Paragraph(f"Candidate: {escape(c.title)} [{strides}]", ss["Bull"],
-                                bulletText="\u2022"))
+        for x in ooc:
+            el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
 
     # ---- evidence appendix: one card per control, grouped by status ----
     groups = evidence_groups(r)
