@@ -415,7 +415,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             if x["detail"]:
                 cell += f'<br/><font size="7.5" color="{_GREY.hexval()}">{escape(x["detail"])}</font>'
             rows.append([x["id"], x["stride"], Paragraph(cell, ss["Cell"]), x["gaps"], x["maps"]])
-        el.append(_table(rows, [1.1 * cm, 2.4 * cm, 6.8 * cm, 3.3 * cm, 2.9 * cm], ss))
+        el.append(_table(rows, [1.1 * cm, 2.3 * cm, 6.3 * cm, 3.9 * cm, 2.9 * cm], ss))
     else:
         el.append(Paragraph("No findings — all expected controls implemented or unknown.", ss["Body"]))
 
@@ -429,7 +429,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
                          _priority_cell(sc.priority.value, ss),
                          Paragraph(f'<font size="7.5">{escape(sc.rationale or "—")}</font>',
                                    ss["Cell"])])
-        el.append(_table(rows, [1.5 * cm] + [0.7 * cm] * 5 + [1.1 * cm, 2.0 * cm, 8.4 * cm], ss))
+        el.append(_table(rows, [1.3 * cm] + [0.85 * cm] * 5 + [1.1 * cm, 2.0 * cm, 7.85 * cm], ss))
     else:
         el.append(Paragraph("No scored threats.", ss["Body"]))
 
@@ -440,7 +440,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         for x in action_rows(r):
             rows.append([x["id"], x["action"], x["closes"], x["controls"],
                          _priority_cell(x["priority"], ss), x["timing"], x["owner"]])
-        el.append(_table(rows, [1.1 * cm, 5.5 * cm, 1.4 * cm, 3.5 * cm, 1.7 * cm, 1.9 * cm,
+        el.append(_table(rows, [1.1 * cm, 5.3 * cm, 1.6 * cm, 3.5 * cm, 1.7 * cm, 1.9 * cm,
                                 1.4 * cm], ss))
     else:
         el.append(Paragraph("Recommendations (gap-closing)", ss["H2"]))

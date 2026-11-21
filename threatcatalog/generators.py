@@ -54,23 +54,40 @@ def _clamp(n: int) -> int:
     return max(1, min(10, n))
 
 
+_PRIO_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+
+
+def action_priority(control_ids: list[str], threat_ids: list[str], gap: list[GapItem],
+                    threats: list[Threat], dread: list[DreadScore]) -> tuple[str, str]:
+    """Priority and timing for an action, from the DREAD scores, so the action plan
+    agrees with Key focus items. Priority is the worst DREAD priority of the threats
+    that exploit the action's controls (the action's own threat links only when it
+    names no control). Timing is before go-live for Critical, or High on a missing
+    control; otherwise within 90 days."""
+    by_threat = {d.threat_id: d for d in dread}
+    status = {gi.control.id: gi.status for gi in gap}
+    if control_ids:
+        tids = [t.id for t in threats if set(t.gaps) & set(control_ids)]
+    else:
+        tids = list(threat_ids)
+    prios = [by_threat[x].priority.value for x in tids if x in by_threat]
+    prio = min(prios, key=lambda p: _PRIO_ORDER.get(p, 9)) if prios else "High"
+    missing = any(status.get(c) == ControlStatus.NOT_PRESENT for c in control_ids)
+    timing = ("Before go-live" if prio == "Critical" or (prio == "High" and missing)
+              else "Within 90 days")
+    return prio, timing
+
+
 def default_actions(findings: list[GapItem], threats: list[Threat],
                     dread: list[DreadScore], start: int = 1) -> list[ActionItem]:
     """One action per finding control, from the control's intent. Used offline, and
     to fill in any finding a model's action plan left out (nothing is dropped).
-    Priority is the worst DREAD priority of the threats it closes; timing is before
-    go-live for Critical, or High on a missing control."""
-    by_threat = {d.threat_id: d for d in dread}
-    order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    Priority and timing come from action_priority."""
     out = []
     for i, gi in enumerate(findings, start=start):
         tids = [t.id for t in threats if gi.control.id in t.gaps]
-        prios = [by_threat[x].priority.value for x in tids if x in by_threat]
-        prio = min(prios, key=lambda p: order.get(p, 9)) if prios else "High"
-        missing = gi.status == ControlStatus.NOT_PRESENT
-        timing = ("Before go-live" if prio == "Critical" or (prio == "High" and missing)
-                  else "Within 90 days")
-        verb = "Put in place" if missing else "Complete"
+        prio, timing = action_priority([gi.control.id], tids, findings, threats, dread)
+        verb = "Put in place" if gi.status == ControlStatus.NOT_PRESENT else "Complete"
         out.append(ActionItem(id=f"A{i}", action=f"{verb}: {gi.control.title}. {gi.control.intent}",
                               threat_ids=tids, control_ids=[gi.control.id], priority=prio,
                               timing=timing))

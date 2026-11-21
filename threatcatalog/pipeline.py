@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from . import __version__
 from .catalog import Catalog, resolve
 from .gap import build_gap
-from .generators import ArtifactEngine, DeterministicArtifactEngine, default_actions
+from .generators import ArtifactEngine, DeterministicArtifactEngine, default_actions, action_priority
 from .intake import detect_from_text, merge_ledger
 from .models import (ActionItem, AppProfile, ArchitectureSummary, Control, ControlStatus, LedgerEntry,
                      ObservedControl, Threat, ThreatModelReport)
@@ -90,17 +90,20 @@ def _cover_dread(dread, threats, gap, profile):
 
 
 def _cover_actions(actions: list[ActionItem], gap, threats, dread) -> list[ActionItem]:
-    """Renumber, keep links to real findings/threats, and add an action for any
-    finding the engine's plan left out."""
+    """Renumber, keep links to real findings/threats, set priority and timing from
+    the DREAD scores (a model's own labels are not kept, so the plan matches Key
+    focus items), and add an action for any finding the engine's plan left out."""
     findings = [gi for gi in gap if gi.is_finding]
     fids = {gi.control.id for gi in findings}
     tids = {t.id for t in threats}
     out = []
     for a in actions:
+        cids = [c for c in a.control_ids if c in fids]
+        ats = [t for t in a.threat_ids if t in tids]
+        prio, timing = action_priority(cids, ats, gap, threats, dread)
         out.append(a.model_copy(update={
-            "id": f"A{len(out) + 1}",
-            "control_ids": [c for c in a.control_ids if c in fids],
-            "threat_ids": [t for t in a.threat_ids if t in tids]}))
+            "id": f"A{len(out) + 1}", "control_ids": cids, "threat_ids": ats,
+            "priority": prio, "timing": timing}))
     covered = {c for a in out for c in a.control_ids}
     missing = [gi for gi in findings if gi.control.id not in covered]
     out += default_actions(missing, threats, dread, start=len(out) + 1)

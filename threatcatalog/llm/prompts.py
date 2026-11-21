@@ -103,11 +103,11 @@ def action_plan_prompt(threats, gap, profile, architecture=None) -> tuple[str, s
              for t in threats]
     user = (f"{_profile_line(profile)}\n{_arch_block(architecture)}Threats:\n{json.dumps(tlist)}\n"
             f"Gap:\n{json.dumps(_gap_payload(gap))}\n\n"
-            'Return a JSON array of {"action","threat_ids","control_ids","priority","timing"}. '
+            'Return a JSON array of {"action","threat_ids","control_ids"}. '
             "action: at most 40 words: what to build or change, where (name the component), "
             "and what done looks like. threat_ids and control_ids: lists of strings it closes. "
-            "priority: Critical | High | Medium | Low. timing: 'Before go-live' or 'Within 90 "
-            "days'. Group closely related controls into one action. Every control whose status "
+            "Priority and timing are set by the tool from the DREAD scores, so do not return "
+            "them. Group closely related controls into one action. Every control whose status "
             "is not_present or partial must appear in at least one action. If a "
             "compensating_note exists for a control, say it only softens the finding "
             "(unverified, not baseline).")

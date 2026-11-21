@@ -16,6 +16,14 @@ from .models import ArchitectureSummary, CompletenessItem, RubricScore
 
 _LIST_LIMIT = 15
 _ITEM_LIMIT = 200
+_EXPOSURE_LIMIT = 600
+
+
+def _clip(text: str, limit: int) -> str:
+    """Shorten at a word boundary and mark the cut, so text never ends mid-word."""
+    if len(text) <= limit:
+        return text
+    return text[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
 
 # The JSON shape both prompts ask for (kept in one place so they stay identical).
 ARCH_SHAPE = ('"architecture": {"components": [..], "entry_points": [..], "data_stores": [..], '
@@ -42,7 +50,7 @@ def _str_list(v: Any) -> list[str]:
             x = x.get("name") or x.get("description") or ""
         x = " ".join(str(x).split())
         if x and x not in out:
-            out.append(x[:_ITEM_LIMIT])
+            out.append(_clip(x, _ITEM_LIMIT))
     return out[:_LIST_LIMIT]
 
 
@@ -59,7 +67,7 @@ def parse_architecture(raw: Any) -> ArchitectureSummary | None:
         external_integrations=_str_list(raw.get("external_integrations")),
         data_flows=_str_list(raw.get("data_flows")),
         trust_boundaries=_str_list(raw.get("trust_boundaries")),
-        exposure=(" ".join(str(exp).split())[:_ITEM_LIMIT] or None) if isinstance(exp, str) else None)
+        exposure=(_clip(" ".join(str(exp).split()), _EXPOSURE_LIMIT) or None) if isinstance(exp, str) else None)
     return None if a.empty else a
 
 

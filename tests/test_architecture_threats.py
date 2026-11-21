@@ -128,7 +128,7 @@ def test_prompts_carry_architecture_and_rubric(catalog, web_llm_profile):
     _s, u = prompts.dread_prompt([], gap, web_llm_profile, a)
     assert "Internet-facing" in u and "Discoverability: 9-10" in u and '"rationale"' in u
     _s, u = prompts.action_plan_prompt([], gap, web_llm_profile, a)
-    assert "Before go-live" in u and "control_ids" in u
+    assert "set by the tool from the DREAD scores" in u and "control_ids" in u
 
 
 class _PartialEngine(DeterministicArtifactEngine):
@@ -173,6 +173,43 @@ def test_action_plan_lists_go_live_first(catalog, web_llm_profile, declared_miss
     timings = [x["timing"] for x in action_rows(r)]
     assert timings == sorted(timings, key=lambda t: 0 if t == "Before go-live" else 1)
     assert all("Close this gap" not in a.action for a in r.actions)
+
+
+class _InflatingEngine(DeterministicArtifactEngine):
+    """A model that labels every action Critical / before go-live, whatever DREAD says."""
+    def generate_action_plan(self, threats, gap, profile, dread, architecture=None):
+        from threatcatalog.models import ActionItem
+        return [ActionItem(id=f"A{i}", action="Do it", threat_ids=[t.id], control_ids=t.gaps,
+                           priority="Critical", timing="Before go-live")
+                for i, t in enumerate(threats, start=1)]
+
+
+def test_action_priority_follows_dread_not_model_labels(catalog, web_llm_profile,
+                                                       declared_missing_ai):
+    r = pipeline.run(web_llm_profile, declared=declared_missing_ai, engine=_InflatingEngine(),
+                     controls=catalog.controls)
+    worst = {}
+    order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    by_t = {d.threat_id: d.priority.value for d in r.dread}
+    for t in r.threats:
+        for g in t.gaps:
+            p = by_t[t.id]
+            if g not in worst or order[p] < order[worst[g]]:
+                worst[g] = p
+    for a in r.actions:
+        assert a.priority == min((worst[c] for c in a.control_ids), key=order.get)
+    if any(d.priority.value != "Critical" for d in r.dread):
+        assert any(a.priority != "Critical" for a in r.actions)      # labels not kept
+    assert all(a.timing == "Within 90 days" for a in r.actions
+               if a.priority in ("Medium", "Low"))
+
+
+def test_long_exposure_is_cut_at_a_word():
+    long = "Suppliers reach the portal over the internet through Front Door " * 15
+    a = parse_architecture({"exposure": long, "components": ["x " * 150]})
+    assert a.exposure.endswith("…") and len(a.exposure) <= 600
+    assert not a.exposure[:-1].endswith(" ")
+    assert len(a.components[0]) <= 200 and a.components[0].endswith("…")
 
 
 # --------------------------------------------------- offline DREAD rules --
