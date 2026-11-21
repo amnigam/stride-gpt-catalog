@@ -6,7 +6,7 @@ import sys
 HERE = pathlib.Path(__file__).parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
-from answer_keys import CORVANE, HALCYON  # noqa: E402
+from answer_keys import CORVANE, HALCYON, MARLOWE, NORTHFIELD  # noqa: E402
 from threatcatalog.catalog.loader import load_controls  # noqa: E402
 
 SAD_LABEL = {"I": "implemented", "P": "partial", "PI": "partial (inferred, AI note)",
@@ -111,4 +111,47 @@ render(HALCYON, HERE.parent / "halcyon-claimpilot", [
     "- Strong platform controls (Shield, WAF, mTLS, CMKs, private endpoints, SCPs, GitOps) should come "
     "back implemented and not generate findings.",
     "- CSRF is only inferable (bearer tokens, not cookies) and should be *partial* with a note.",
+])
+
+MINIMAL_NOTE = ("Minimal demo app: one platform layer only, so the run is quick and the report short. "
+                "The SAD states plainly that there is no web UI, no API, no queue or file transfer, no "
+                "containers and no AI. If the model still ticks one of those facets on the confirmation "
+                "screen, untick it before running; that is a good moment to show the reviewer step.")
+
+render(MARLOWE, HERE.parent / "marlowe-shift-reporter", [
+    ("Marlowe_ShiftReporter_SAD_v1.0.docx", "SAD for the SAD upload page (Word, diagram embedded)"),
+    ("Marlowe_ShiftReporter_SAD_v1.0.pdf", "the same SAD as PDF"),
+    ("Marlowe_ShiftReporter_Description.txt", "description for the main page (paste into the description box)"),
+    ("Marlowe_ShiftReporter_Architecture.png", "architecture diagram for the main page"),
+], [
+    "## Things this sample is designed to test",
+    "",
+    "- " + MINIMAL_NOTE,
+    "- On-premises only: expect the onprem facet (firewall, host hardening, EDR) and *not* cloud. "
+    "The reports are viewed in an existing Power BI Report Server that the SAD puts out of scope, "
+    "so web should stay unticked.",
+    "- Firewall rules, the MFA jump host, the CIS baseline and Defender for Endpoint are clearest on the "
+    "diagram, so the description page needs the image to find them.",
+    "- Stated absences (no TDE or disk encryption, no dependency scanning, no Splunk alerting, "
+    "no pentest) should come back *not present* with a quote.",
+    "- Internal classification, no PCI: expect a short report with a handful of High findings at most.",
+])
+
+render(NORTHFIELD, HERE.parent / "northfield-sms-reminders", [
+    ("Northfield_SMSReminders_SAD_v1.0.docx", "SAD for the SAD upload page (Word, diagram embedded)"),
+    ("Northfield_SMSReminders_SAD_v1.0.pdf", "the same SAD as PDF"),
+    ("Northfield_SMSReminders_Description.txt", "description for the main page (paste into the description box)"),
+    ("Northfield_SMSReminders_Architecture.png", "architecture diagram for the main page"),
+], [
+    "## Things this sample is designed to test",
+    "",
+    "- " + MINIMAL_NOTE,
+    "- Serverless on Google Cloud: expect the cloud facet only. Cloud Functions run on Google-managed "
+    "containers and Cloud Scheduler calls the function over HTTPS, so a model may tick container or api; "
+    "the SAD says the team builds no containers and the function accepts only internal, authenticated calls.",
+    "- Health-related personal data makes it Confidential. PCI is out of scope (stated).",
+    "- The headline gaps are deliberate and stated: DEBUG logs with full phone numbers and message text, "
+    "standing Owner for every engineer, unrestricted egress and the API key duplicated in Cloud Build.",
+    "- Strong points (keyless service accounts, IAM DB auth, private IP, Terraform with drift check, "
+    "Semgrep, DPIA) should come back implemented and produce no findings.",
 ])

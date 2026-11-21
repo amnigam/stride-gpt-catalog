@@ -64,14 +64,16 @@ python -m threatcatalog.cli testapp/peopledesk_intake.json --out /tmp/peopledesk
 
 # Sample applications for end-to-end testing
 
-Two fictional applications with everything needed to test both input modes.
+Four fictional applications with everything needed to test both input modes.
 Each folder has an `ANSWER_KEY.md` with the expected facets and the expected
 status of every control, so a run can be checked line by line.
 
 | Sample | What it is | SAD page | Main page (description + diagram) |
 |---|---|---|---|
-| [`corvane-supplier-hub/`](corvane-supplier-hub/ANSWER_KEY.md) | Simple web app on Azure (App Service, SQL, Blob, Front Door). 53 controls: web, cloud, no AI, Confidential, no PCI. | `Corvane_SupplierHub_SAD_v1.2.docx` or `.pdf`; `..._v0.1_DRAFT_incomplete.docx` must stop the run | `Corvane_SupplierHub_Description.txt` + `Corvane_SupplierHub_Architecture.png` |
+| [`corvane-supplier-hub/`](corvane-supplier-hub/ANSWER_KEY.md) | Simple web app on Azure (App Service, SQL, Blob, Front Door). 60 controls: web, cloud, messaging, no AI, Confidential, no PCI. | `Corvane_SupplierHub_SAD_v1.2.docx` or `.pdf`; `..._v0.1_DRAFT_incomplete.docx` must stop the run | `Corvane_SupplierHub_Description.txt` + `Corvane_SupplierHub_Architecture.png` |
 | [`halcyon-claimpilot/`](halcyon-claimpilot/ANSWER_KEY.md) | Agentic AI claims app on AWS (EKS, Bedrock, LangGraph agents, MCP, RAG, Kafka, fine-tuned model). 111 controls: web, cloud, api, container, messaging + agentic, mcp, generative, training; Restricted; PCI in scope. | `Halcyon_ClaimPilot_SAD_v2.0.docx` or `.pdf` (3 diagrams embedded) | `Halcyon_ClaimPilot_Description.txt` + `Halcyon_ClaimPilot_Architecture_Overview.png` |
+| [`marlowe-shift-reporter/`](marlowe-shift-reporter/ANSWER_KEY.md) | **Minimal demo.** On-premises scheduled job at a food plant (Windows Server VM, Python, SQL Server). 37 controls: onprem only, no AI, Internal, no PCI. | `Marlowe_ShiftReporter_SAD_v1.0.docx` or `.pdf` | `Marlowe_ShiftReporter_Description.txt` + `Marlowe_ShiftReporter_Architecture.png` |
+| [`northfield-sms-reminders/`](northfield-sms-reminders/ANSWER_KEY.md) | **Minimal demo.** Serverless SMS appointment reminders on Google Cloud (Cloud Functions, Cloud SQL, third-party SMS gateway). 42 controls: cloud only, no AI, Confidential, no PCI. | `Northfield_SMSReminders_SAD_v1.0.docx` or `.pdf` | `Northfield_SMSReminders_Description.txt` + `Northfield_SMSReminders_Architecture.png` |
 
 On the main page set the facets by hand to the values in the answer key, paste
 the description, upload the diagram and press Detect. The SAD page infers the
@@ -80,4 +82,6 @@ facets itself; compare its confirmation screen with the answer key.
 Each SAD deliberately mixes controls that are stated as in place, stated with
 limits (partial), only inferable from the tech stack (partial with an AI note),
 stated as missing, and not mentioned at all, so every status appears in the
-report. The sources and build scripts are in [`sources/`](sources/).
+report. The two minimal demo apps select one platform layer each, so they run
+fastest and give the shortest report; use them for live demos. The sources and
+build scripts are in [`sources/`](sources/).

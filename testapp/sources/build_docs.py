@@ -23,6 +23,10 @@ JOBS = [
      "Corvane Logistics · DRAFT", False),
     ("halcyon_sad.md", "../halcyon-claimpilot/Halcyon_ClaimPilot_SAD_v2.0.docx",
      "Halcyon Mutual · RESTRICTED · ClaimPilot SAD v2.0", True),
+    ("marlowe_sad.md", "../marlowe-shift-reporter/Marlowe_ShiftReporter_SAD_v1.0.docx",
+     "Marlowe Foods · INTERNAL · Shift Reporter SAD v1.0", True),
+    ("northfield_sad.md", "../northfield-sms-reminders/Northfield_SMSReminders_SAD_v1.0.docx",
+     "Northfield Physiotherapy Group · CONFIDENTIAL · SMS Reminders SAD v1.0", True),
 ]
 
 INLINE = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`)")
@@ -144,7 +148,11 @@ def build(md_path: pathlib.Path, out: pathlib.Path, foot: str):
 
 
 if __name__ == "__main__":
+    import sys
+    want = sys.argv[1:]          # optional filter, e.g. `python build_docs.py marlowe northfield`
     for src, out, foot, pdf in JOBS:
+        if want and not any(w in src for w in want):
+            continue
         src_p = HERE / src
         if not src_p.exists():
             continue

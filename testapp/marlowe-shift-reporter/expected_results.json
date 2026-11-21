@@ -1,0 +1,203 @@
+{
+  "application": "Marlowe Shift Reporter",
+  "facets": {
+    "platforms": [
+      "onprem"
+    ],
+    "ai": [
+      "none"
+    ],
+    "data_classification": "Internal",
+    "pci": false
+  },
+  "out_of_catalog": [
+    "Reconciliation of computed shift output against ERP goods-receipt totals (>2% variance flags the report 'unverified')"
+  ],
+  "controls": {
+    "IAM-SSO-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "AD accounts with Windows integrated sign-in to the reports (§6.1)"
+    },
+    "IAM-LPA-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Read-only views on the MES, but db_owner on SHIFTKPI (§6.2, OI-1)"
+    },
+    "DATA-ENC-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "No TDE and no disk encryption (§4.2, §10)"
+    },
+    "DATA-TLS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "TLS 1.2 on SQL, plain-text SMTP to the relay (§5)"
+    },
+    "LOG-AUD-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Local log files only; Windows events to Splunk, app logs not forwarded (§11.1)"
+    },
+    "DATA-CLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Classified Marlowe Internal under ISP-04 (§4.1)"
+    },
+    "SEC-SECRETS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "gMSA with AD-rotated password; no stored secrets (§6.2)"
+    },
+    "IN-VAL-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "MES rows range-checked; parameterised SQL (§7)"
+    },
+    "SCA-SBOM-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "Dependencies pinned but not scanned; no SBOM (§8.4)"
+    },
+    "IAM-MFA-001": {
+      "sad_status": "partial",
+      "description_status": "partial (diagram)",
+      "evidence": "Duo MFA on the admin jump host; no MFA for report readers (§6.1; diagram)"
+    },
+    "IAM-PAM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "CyberArk check-out with session recording (§6.1)"
+    },
+    "IAM-S2S-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "gMSA with Kerberos to both databases (§5, §6.2)"
+    },
+    "DATA-MASK-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-LIFE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Three-year retention with a monthly purge job (§4.2)"
+    },
+    "LOG-RED-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "LOG-CORR-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "No Splunk alerts or correlation for this application (§11.1)"
+    },
+    "EXT-TPR-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Contract with confidentiality clause, no vendor security assessment (§9)"
+    },
+    "NET-EGRESS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "No internet route from the server VLAN; outbound denied by default (§8.2; diagram)"
+    },
+    "RES-DEP-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Retries then alerts Plant IT, but the report shows stale data unflagged (§7)"
+    },
+    "RES-DR-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Nightly Veeam and SQL backups; restore never tested, single server (§11.2)"
+    },
+    "IR-RESP-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "SDLC-SAST-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Peer review only, no SAST (§8.4)"
+    },
+    "SDLC-PIPE-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Branch policy, but manual deployment over RDP (§8.4)"
+    },
+    "VULN-PATCH-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Monthly WSUS, critical within 14 days, weekly Qualys (§8.3)"
+    },
+    "SEC-PENTEST-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "Not planned (§10)"
+    },
+    "ERR-HAND-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-CRYPTO-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "unknown",
+      "evidence": "SQL TLS certificates from the internal CA imply a certificate lifecycle; no crypto standard named (§5)"
+    },
+    "IAM-LCM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "ServiceNow requests, quarterly recertification, HR-driven leavers (§6.3)"
+    },
+    "IAM-ATO-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-RES-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "All data stays in the Harrogate data centre, UK (§4.2)"
+    },
+    "DATA-PRIV-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Supervisor names are personal data; no DPIA or privacy review mentioned"
+    },
+    "DATA-NONPROD-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Test uses a synthetic MES dataset (§4.2)"
+    },
+    "NET-MGMT-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "RDP only from the MFA jump host in the admin VLAN (§6.1, §8.2; diagram)"
+    },
+    "ONP-FW-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Plant firewall: RDP from jump host, SQL from Report Server only (§8.2; diagram)"
+    },
+    "ONP-HARD-001": {
+      "sad_status": "partial",
+      "description_status": "partial (diagram)",
+      "evidence": "CIS L1 GPO baseline with 12 exceptions; SQL Server not hardened (§8.1; diagram)"
+    },
+    "EDR-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Defender for Endpoint on both servers (§8.1; diagram)"
+    },
+    "IMMUT-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "Servers built by hand, manual changes over RDP, no drift detection (§8.1)"
+    }
+  }
+}

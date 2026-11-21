@@ -1,4 +1,4 @@
-"""Expected results for the two sample applications.
+"""Expected results for the sample applications.
 
 Status codes (SAD page):
   I   implemented          the SAD states the control is in place
@@ -220,5 +220,112 @@ HALCYON = {
         "GEN-SAFE-001": ("I", "-", "Guardrails content filters + approved letter templates (§4.4)"),
         # ai.training
         "AI-TRAIN-001": ("P", "T", "Dataset approved, but faces/plates not scrubbed (§4.3)"),
+    },
+}
+
+
+# --------------------------------------------------------------------------- #
+# Minimal demo apps: few layers, quick to run through all three flows.
+# --------------------------------------------------------------------------- #
+MARLOWE = {
+    "name": "Marlowe Shift Reporter",
+    "facets": {"platforms": ["onprem"], "ai": ["none"],
+               "data_classification": "Internal", "pci": False},
+    "out_of_catalog": ["Reconciliation of computed shift output against ERP goods-receipt totals "
+                       "(>2% variance flags the report 'unverified')"],
+    "controls": {
+        # base
+        "IAM-SSO-001": ("I", "T", "AD accounts with Windows integrated sign-in to the reports (§6.1)"),
+        "IAM-LPA-001": ("P", "T", "Read-only views on the MES, but db_owner on SHIFTKPI (§6.2, OI-1)"),
+        "DATA-ENC-001": ("NPS", "A", "No TDE and no disk encryption (§4.2, §10)"),
+        "DATA-TLS-001": ("P", "T", "TLS 1.2 on SQL, plain-text SMTP to the relay (§5)"),
+        "LOG-AUD-001": ("P", "T", "Local log files only; Windows events to Splunk, app logs not forwarded (§11.1)"),
+        "DATA-CLS-001": ("I", "T", "Classified Marlowe Internal under ISP-04 (§4.1)"),
+        "SEC-SECRETS-001": ("I", "T", "gMSA with AD-rotated password; no stored secrets (§6.2)"),
+        "IN-VAL-001": ("I", "T", "MES rows range-checked; parameterised SQL (§7)"),
+        "SCA-SBOM-001": ("NPS", "-", "Dependencies pinned but not scanned; no SBOM (§8.4)"),
+        "IAM-MFA-001": ("P", "D", "Duo MFA on the admin jump host; no MFA for report readers (§6.1; diagram)"),
+        "IAM-PAM-001": ("I", "T", "CyberArk check-out with session recording (§6.1)"),
+        "IAM-S2S-001": ("I", "T", "gMSA with Kerberos to both databases (§5, §6.2)"),
+        "DATA-MASK-001": ("NP", "-", "Not mentioned"),
+        "DATA-LIFE-001": ("I", "T", "Three-year retention with a monthly purge job (§4.2)"),
+        "LOG-RED-001": ("NP", "-", "Not mentioned"),
+        "LOG-CORR-001": ("NPS", "A", "No Splunk alerts or correlation for this application (§11.1)"),
+        "EXT-TPR-001": ("P", "T", "Contract with confidentiality clause, no vendor security assessment (§9)"),
+        "NET-EGRESS-001": ("I", "D", "No internet route from the server VLAN; outbound denied by default (§8.2; diagram)"),
+        "RES-DEP-001": ("P", "T", "Retries then alerts Plant IT, but the report shows stale data unflagged (§7)"),
+        "RES-DR-001": ("P", "T", "Nightly Veeam and SQL backups; restore never tested, single server (§11.2)"),
+        "IR-RESP-001": ("NP", "-", "Not mentioned"),
+        "SDLC-SAST-001": ("P", "T", "Peer review only, no SAST (§8.4)"),
+        "SDLC-PIPE-001": ("P", "T", "Branch policy, but manual deployment over RDP (§8.4)"),
+        "VULN-PATCH-001": ("I", "T", "Monthly WSUS, critical within 14 days, weekly Qualys (§8.3)"),
+        "SEC-PENTEST-001": ("NPS", "-", "Not planned (§10)"),
+        "ERR-HAND-001": ("NP", "-", "Not mentioned"),
+        "DATA-CRYPTO-001": ("PI", "-", "SQL TLS certificates from the internal CA imply a certificate lifecycle; no crypto standard named (§5)"),
+        "IAM-LCM-001": ("I", "T", "ServiceNow requests, quarterly recertification, HR-driven leavers (§6.3)"),
+        "IAM-ATO-001": ("NP", "-", "Not mentioned"),
+        "DATA-RES-001": ("I", "T", "All data stays in the Harrogate data centre, UK (§4.2)"),
+        "DATA-PRIV-001": ("NP", "-", "Supervisor names are personal data; no DPIA or privacy review mentioned"),
+        "DATA-NONPROD-001": ("I", "T", "Test uses a synthetic MES dataset (§4.2)"),
+        "NET-MGMT-001": ("I", "D", "RDP only from the MFA jump host in the admin VLAN (§6.1, §8.2; diagram)"),
+        # onprem
+        "ONP-FW-001": ("I", "D", "Plant firewall: RDP from jump host, SQL from Report Server only (§8.2; diagram)"),
+        "ONP-HARD-001": ("P", "D", "CIS L1 GPO baseline with 12 exceptions; SQL Server not hardened (§8.1; diagram)"),
+        "EDR-001": ("I", "D", "Defender for Endpoint on both servers (§8.1; diagram)"),
+        "IMMUT-001": ("NPS", "-", "Servers built by hand, manual changes over RDP, no drift detection (§8.1)"),
+    },
+}
+
+NORTHFIELD = {
+    "name": "Northfield SMS Reminders",
+    "facets": {"platforms": ["cloud"], "ai": ["none"],
+               "data_classification": "Confidential", "pci": False},
+    "out_of_catalog": ["Quiet-hours rule: no SMS outside 09:00-20:00 UK time",
+                       "Daily send cap of 3,000 messages with an on-call alert"],
+    "controls": {
+        # base
+        "IAM-SSO-001": ("I", "T", "Google Workspace accounts for engineers (§6.1)"),
+        "IAM-LPA-001": ("I", "T", "Service account and DB user limited to one view and one insert table (§6.2)"),
+        "DATA-ENC-001": ("I", "T", "Google default encryption at rest (§4.2)"),
+        "DATA-TLS-001": ("I", "T", "TLS 1.2+ to SignalPost and Cloud SQL (§5, §10)"),
+        "LOG-AUD-001": ("P", "T", "Cloud Logging 30 days; not forwarded to a SIEM (§11.1)"),
+        "DATA-CLS-001": ("I", "T", "Classified Northfield Confidential by the DPO (§4.1)"),
+        "SEC-SECRETS-001": ("P", "T", "Secret Manager, but the key is also a Cloud Build substitution variable (§8.3)"),
+        "IN-VAL-001": ("P", "T", "Phone numbers validated; first name inserted unchecked (§7)"),
+        "SCA-SBOM-001": ("I", "D", "pip-audit blocks High/Critical; CycloneDX SBOM per release (§8.3; diagram)"),
+        "IAM-MFA-001": ("I", "T", "Workspace 2-step verification with security keys (§6.1)"),
+        "IAM-PAM-001": ("NPS", "A", "Standing Owner role for all three engineers, no JIT (§6.1)"),
+        "IAM-S2S-001": ("I", "T", "Keyless service account, OIDC from Scheduler, IAM DB auth (§5, §6.2)"),
+        "DATA-MASK-001": ("I", "T", "Send log keeps only the last three digits of the mobile number (§4.2)"),
+        "DATA-LIFE-001": ("P", "T", "90-day send-log purge; SignalPost keeps content 12 months (§4.2)"),
+        "LOG-RED-001": ("NPS", "A", "DEBUG logs hold full phone number and message text (§11.1)"),
+        "LOG-CORR-001": ("P", "T", "Operational alerts to on-call; no SIEM or security alerting (§11.1)"),
+        "EXT-TPR-001": ("I", "T", "SignalPost VSA completed, DPA signed (§9)"),
+        "NET-EGRESS-001": ("NPS", "A", "Unrestricted outbound internet from the function (§8.2)"),
+        "RES-DEP-001": ("I", "T", "Backoff for two hours, then 'not sent' and reception phones; idempotency key (§7)"),
+        "RES-DR-001": ("P", "-", "Daily backups + PITR; restore not tested (§11.3)"),
+        "IR-RESP-001": ("P", "T", "Pause the scheduler job; no wrong-recipient playbook (§11.2)"),
+        "SDLC-SAST-001": ("I", "T", "Semgrep on every pull request, findings fail the build (§8.3)"),
+        "SDLC-PIPE-001": ("I", "T", "Terraform via Cloud Build with WIF, branch protection (§8.3)"),
+        "VULN-PATCH-001": ("PI", "-", "Serverless: Google patches the runtime; no patch SLA stated (§8.1)"),
+        "SEC-PENTEST-001": ("NPS", "-", "Not planned (§10)"),
+        "ERR-HAND-001": ("NP", "-", "Not mentioned"),
+        "DATA-CRYPTO-001": ("NP", "-", "Not mentioned"),
+        "IAM-LCM-001": ("P", "-", "HR leaver process, but no periodic access review of project roles (§6.1)"),
+        "IAM-ATO-001": ("NP", "-", "Not mentioned (no end-user accounts)"),
+        "DATA-RES-001": ("I", "T", "europe-west2 only; SignalPost UK-only processing (§4.2)"),
+        "DATA-PRIV-001": ("I", "T", "DPIA approved, opt-in consent checked before sending (§4.2)"),
+        "DATA-NONPROD-001": ("P", "T", "Test uses real appointments with phone numbers replaced (§4.2)"),
+        "NET-MGMT-001": ("NP", "-", "Not mentioned"),
+        # cloud
+        "CLD-SEG-001": ("I", "T", "Dedicated project; private-IP database over the Shared VPC connector (§2, §8.2)"),
+        "CLD-KMS-001": ("P", "T", "Google-managed keys only, no CMEK (§4.2)"),
+        "CLD-IAM-001": ("P", "T", "Service accounts least-privilege, but engineers hold basic Owner (§6)"),
+        "CLD-SG-001": ("I", "D", "Shared VPC firewall denies all ingress; SQL only from connector range (§8.2; diagram)"),
+        "IMMUT-001": ("I", "T", "All infrastructure in Terraform with nightly drift check (§8.3)"),
+        "CLD-CSPM-001": ("P", "D", "Org policies inherited; Security Command Center not enabled (§8.1; diagram)"),
+        "CLD-LOG-001": ("I", "D", "Cloud Audit Logs to a locked bucket, 400 days (§11.1; diagram)"),
+        "CLD-PE-001": ("I", "T", "Cloud SQL private IP only, public IP disabled (§8.2)"),
+        "EDR-001": ("NP", "-", "Not mentioned (serverless)"),
     },
 }

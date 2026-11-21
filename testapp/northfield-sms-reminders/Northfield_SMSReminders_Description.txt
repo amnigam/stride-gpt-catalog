@@ -1,0 +1,22 @@
+Northfield SMS Reminders — application description
+
+Purpose
+Northfield SMS Reminders sends patients of Northfield Physiotherapy Group (a fictional chain of 14 clinics in the north of England) a text message the evening before their appointment, to reduce missed appointments. It is a single scheduled function on Google Cloud. It has no user interface, exposes no API, and patients cannot reply to the messages. There are no message queues or file transfers, no containers built by the team, no AI or machine-learning functionality, and no payment card data.
+
+Users
+About 1,900 patients receive a reminder each day. Reception staff see failed reminders on their existing ClinicDesk screens and phone those patients. Three Digital team engineers operate the Google Cloud project.
+
+Hosting and components
+Every day at 17:00 Cloud Scheduler calls a Cloud Functions (2nd gen) Python function with an OIDC token; the function only accepts internal, authenticated calls. The function reads tomorrow's appointments (for patients who gave SMS consent) from the existing ClinicDesk Cloud SQL for PostgreSQL database over private IP through a Serverless VPC Access connector, reads the SignalPost API key from Secret Manager, sends each SMS through the SignalPost API (a UK SMS gateway), and writes the result to a send-log table. Everything is in europe-west2 (London). Infrastructure is defined in Terraform and deployed by Cloud Build from GitHub using Workload Identity Federation.
+
+Identity and access
+Engineers sign in with Google Workspace accounts protected by security keys. The function runs as a dedicated service account with no keys and only the roles it needs, and connects to the database with IAM database authentication; it can only read one view and insert into the send log.
+
+Data protection
+Data is classified Northfield Confidential: patient first names, mobile numbers and appointment times, which are health-related personal data. A DPIA has been approved and patients opt in to reminders when they book. The SMS never includes the treatment type. Data is encrypted at rest with Google-managed keys and in transit with TLS 1.2 or higher. The send log keeps only the last three digits of the mobile number and is purged after 90 days; SignalPost keeps message content for 12 months. Phone numbers are validated before sending, but the first name goes into the message as stored. The test project uses last month's real appointments with the phone numbers replaced by test phones.
+
+Integrations
+SignalPost has passed a vendor security assessment, has a signed data processing agreement and processes data only in the UK. If SignalPost is down the function retries for two hours, then records the reminders as not sent and alerts on-call; an idempotency key per appointment prevents duplicate messages.
+
+Delivery and operations
+Pull requests need one review and run Semgrep, and the build fails on High or Critical findings. A nightly Terraform plan reports configuration drift. Function logs go to Cloud Logging for 30 days and are written at DEBUG level, which includes the full phone number and message text. Cloud Monitoring alerts on-call when the function fails or more than 10% of sends fail; there is no SIEM. The on-call engineer can pause the scheduler job to stop all sends. The SignalPost key is also stored as a Cloud Build variable for integration tests. All three engineers hold the Owner role on the production project permanently. Outbound internet access from the function is not restricted.

@@ -1,0 +1,229 @@
+{
+  "application": "Northfield SMS Reminders",
+  "facets": {
+    "platforms": [
+      "cloud"
+    ],
+    "ai": [
+      "none"
+    ],
+    "data_classification": "Confidential",
+    "pci": false
+  },
+  "out_of_catalog": [
+    "Quiet-hours rule: no SMS outside 09:00-20:00 UK time",
+    "Daily send cap of 3,000 messages with an on-call alert"
+  ],
+  "controls": {
+    "IAM-SSO-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Google Workspace accounts for engineers (§6.1)"
+    },
+    "IAM-LPA-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Service account and DB user limited to one view and one insert table (§6.2)"
+    },
+    "DATA-ENC-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Google default encryption at rest (§4.2)"
+    },
+    "DATA-TLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "TLS 1.2+ to SignalPost and Cloud SQL (§5, §10)"
+    },
+    "LOG-AUD-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Cloud Logging 30 days; not forwarded to a SIEM (§11.1)"
+    },
+    "DATA-CLS-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Classified Northfield Confidential by the DPO (§4.1)"
+    },
+    "SEC-SECRETS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Secret Manager, but the key is also a Cloud Build substitution variable (§8.3)"
+    },
+    "IN-VAL-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Phone numbers validated; first name inserted unchecked (§7)"
+    },
+    "SCA-SBOM-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "pip-audit blocks High/Critical; CycloneDX SBOM per release (§8.3; diagram)"
+    },
+    "IAM-MFA-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Workspace 2-step verification with security keys (§6.1)"
+    },
+    "IAM-PAM-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Standing Owner role for all three engineers, no JIT (§6.1)"
+    },
+    "IAM-S2S-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Keyless service account, OIDC from Scheduler, IAM DB auth (§5, §6.2)"
+    },
+    "DATA-MASK-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Send log keeps only the last three digits of the mobile number (§4.2)"
+    },
+    "DATA-LIFE-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "90-day send-log purge; SignalPost keeps content 12 months (§4.2)"
+    },
+    "LOG-RED-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "DEBUG logs hold full phone number and message text (§11.1)"
+    },
+    "LOG-CORR-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Operational alerts to on-call; no SIEM or security alerting (§11.1)"
+    },
+    "EXT-TPR-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "SignalPost VSA completed, DPA signed (§9)"
+    },
+    "NET-EGRESS-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown → declare not present",
+      "evidence": "Unrestricted outbound internet from the function (§8.2)"
+    },
+    "RES-DEP-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Backoff for two hours, then 'not sent' and reception phones; idempotency key (§7)"
+    },
+    "RES-DR-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "Daily backups + PITR; restore not tested (§11.3)"
+    },
+    "IR-RESP-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Pause the scheduler job; no wrong-recipient playbook (§11.2)"
+    },
+    "SDLC-SAST-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Semgrep on every pull request, findings fail the build (§8.3)"
+    },
+    "SDLC-PIPE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Terraform via Cloud Build with WIF, branch protection (§8.3)"
+    },
+    "VULN-PATCH-001": {
+      "sad_status": "partial (inferred, AI note)",
+      "description_status": "unknown",
+      "evidence": "Serverless: Google patches the runtime; no patch SLA stated (§8.1)"
+    },
+    "SEC-PENTEST-001": {
+      "sad_status": "not present (stated)",
+      "description_status": "unknown",
+      "evidence": "Not planned (§10)"
+    },
+    "ERR-HAND-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "DATA-CRYPTO-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "IAM-LCM-001": {
+      "sad_status": "partial",
+      "description_status": "unknown",
+      "evidence": "HR leaver process, but no periodic access review of project roles (§6.1)"
+    },
+    "IAM-ATO-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned (no end-user accounts)"
+    },
+    "DATA-RES-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "europe-west2 only; SignalPost UK-only processing (§4.2)"
+    },
+    "DATA-PRIV-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "DPIA approved, opt-in consent checked before sending (§4.2)"
+    },
+    "DATA-NONPROD-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Test uses real appointments with phone numbers replaced (§4.2)"
+    },
+    "NET-MGMT-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned"
+    },
+    "CLD-SEG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Dedicated project; private-IP database over the Shared VPC connector (§2, §8.2)"
+    },
+    "CLD-KMS-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Google-managed keys only, no CMEK (§4.2)"
+    },
+    "CLD-IAM-001": {
+      "sad_status": "partial",
+      "description_status": "partial",
+      "evidence": "Service accounts least-privilege, but engineers hold basic Owner (§6)"
+    },
+    "CLD-SG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Shared VPC firewall denies all ingress; SQL only from connector range (§8.2; diagram)"
+    },
+    "IMMUT-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "All infrastructure in Terraform with nightly drift check (§8.3)"
+    },
+    "CLD-CSPM-001": {
+      "sad_status": "partial",
+      "description_status": "partial (diagram)",
+      "evidence": "Org policies inherited; Security Command Center not enabled (§8.1; diagram)"
+    },
+    "CLD-LOG-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented (diagram)",
+      "evidence": "Cloud Audit Logs to a locked bucket, 400 days (§11.1; diagram)"
+    },
+    "CLD-PE-001": {
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Cloud SQL private IP only, public IP disabled (§8.2)"
+    },
+    "EDR-001": {
+      "sad_status": "not present (not stated)",
+      "description_status": "unknown",
+      "evidence": "Not mentioned (serverless)"
+    }
+  }
+}
