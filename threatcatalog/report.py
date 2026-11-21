@@ -113,17 +113,30 @@ def sad_inferred(gi: GapItem) -> bool:
             and gi.evidence.ai_basis == "inferred")
 
 
-def needs_verification(gi: GapItem, auto: bool) -> bool:
+def _sad_flagged(gi: GapItem) -> bool:
+    """A Partial the SAD only implies, or whose cited quote was not found or does not
+    back the status."""
+    ev = gi.evidence
+    return gi.status == ControlStatus.PARTIAL and ev is not None and (
+        ev.ai_basis == "inferred" or ev.quote_verified is False or ev.quote_supports is False)
+
+
+def needs_verification(gi: GapItem, auto: bool, from_sad: bool = False) -> bool:
     """Counted under "To verify". In an automated SAD run: partials the SAD only
     implies, or whose cited quote could not be found or does not back the status.
-    On the review page: unknowns, and statuses still resting on unreviewed AI."""
+    A SAD run reviewed on the main page counts the same thing (unless a reviewer
+    has confirmed or changed it), plus anything left Unknown, so the number means
+    the same in both SAD flows. Description-only runs: unknowns, and statuses still
+    resting on unreviewed AI."""
     if gi.status == ControlStatus.NOT_APPLICABLE:
         return False
     if auto:
-        ev = gi.evidence
-        return gi.status == ControlStatus.PARTIAL and ev is not None and (
-            ev.ai_basis == "inferred" or ev.quote_verified is False or ev.quote_supports is False)
-    return gi.status == ControlStatus.UNKNOWN or gi.basis == EvidenceBasis.AI_UNREVIEWED
+        return _sad_flagged(gi)
+    if gi.status == ControlStatus.UNKNOWN:
+        return True
+    if from_sad:
+        return gi.basis == EvidenceBasis.AI_UNREVIEWED and _sad_flagged(gi)
+    return gi.basis == EvidenceBasis.AI_UNREVIEWED
 
 
 _REVIEWED = (EvidenceBasis.AI_CONFIRMED, EvidenceBasis.REVIEWER_OVERRIDE,
@@ -373,7 +386,7 @@ def summary_facts(r: ThreatModelReport) -> dict:
     n_silent = sum(1 for g in not_present if sad_silent(g))
     counts["sad_silent"] = n_silent
     auto = automated(r)
-    counts["to_verify"] = sum(1 for g in gi if needs_verification(g, auto))
+    counts["to_verify"] = sum(1 for g in gi if needs_verification(g, auto, r.sad is not None))
     counts["reviewed"] = None if auto else sum(1 for g in gi if g.basis in _REVIEWED)
 
     # ---- posture: a short, plain-language narrative (list of paragraphs) ----
@@ -802,6 +815,12 @@ def tile_legend(r: ThreatModelReport) -> str:
                 "the SAD only implies them, or the cited quote was not found in the SAD or "
                 "does not support the status (already counted under Partial). "
                 "Reviewed: Draft, because no person has reviewed this automated run.")
+    if r.sad is not None:
+        return ("To verify: Partial controls whose status still needs confirming, because "
+                "the SAD only implies them, or the cited quote was not found in the SAD or "
+                "does not support the status, and that no reviewer has confirmed; plus any "
+                "control left Unknown. "
+                "Reviewed: controls whose status a reviewer has confirmed or set.")
     return ("To verify: controls whose status is still Unknown, plus statuses that rest on "
             "an AI evaluation no reviewer has confirmed. "
             "Reviewed: controls whose status a reviewer has confirmed or set.")
