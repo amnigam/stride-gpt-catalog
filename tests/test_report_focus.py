@@ -92,8 +92,8 @@ def test_to_verify_and_reviewed_counts(catalog):
     _r, r2, _e2 = _flow2(catalog, edit)
     c2 = summary_facts(r2)["counts"]
     assert c2["reviewed"] == 1
-    # every row not touched by the reviewer still rests on the AI, plus the unknown
-    assert c2["to_verify"] == c2["expected"]
+    # same meaning as the SAD run (no inferred / failed quotes in the stub), plus the unknown
+    assert c2["to_verify"] == c1["to_verify"] + 1
     md = render_markdown(r2)
     assert f"**Reviewed** 1 of {c2['expected']}" in md
 
@@ -193,3 +193,17 @@ def test_tiles_are_explained_per_flow(catalog, declared_missing_ai, web_llm_prof
     assert "*To verify: Partial controls whose status still needs confirming" in render_markdown(report)
     r3 = pipeline.run(web_llm_profile, description="x", declared=declared_missing_ai)
     assert "*To verify: controls whose status is still Unknown" in render_markdown(r3)
+
+
+def test_to_verify_means_the_same_in_both_sad_flows(catalog):
+    from threatcatalog.models import ControlEvidence, EvidenceBasis
+    _r, r2, _e = _flow2(catalog)
+    flagged = [g for g in r2.gap_items if g.status != ControlStatus.UNKNOWN][:2]
+    for g in flagged:
+        g.status = ControlStatus.PARTIAL
+        g.evidence = (g.evidence or ControlEvidence()).model_copy(update={"ai_basis": "inferred"})
+    flagged[0].basis = EvidenceBasis.AI_UNREVIEWED     # still resting on the AI: counted
+    flagged[1].basis = EvidenceBasis.AI_CONFIRMED      # a reviewer confirmed it: not counted
+    before = sum(1 for g in r2.gap_items if g.status == ControlStatus.UNKNOWN)
+    assert summary_facts(r2)["counts"]["to_verify"] == before + 1
+    assert "and that no reviewer has confirmed" in render_markdown(r2)

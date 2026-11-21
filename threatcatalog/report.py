@@ -113,17 +113,30 @@ def sad_inferred(gi: GapItem) -> bool:
             and gi.evidence.ai_basis == "inferred")
 
 
-def needs_verification(gi: GapItem, auto: bool) -> bool:
+def _sad_flagged(gi: GapItem) -> bool:
+    """A Partial the SAD only implies, or whose cited quote was not found or does not
+    back the status."""
+    ev = gi.evidence
+    return gi.status == ControlStatus.PARTIAL and ev is not None and (
+        ev.ai_basis == "inferred" or ev.quote_verified is False or ev.quote_supports is False)
+
+
+def needs_verification(gi: GapItem, auto: bool, from_sad: bool = False) -> bool:
     """Counted under "To verify". In an automated SAD run: partials the SAD only
     implies, or whose cited quote could not be found or does not back the status.
-    On the review page: unknowns, and statuses still resting on unreviewed AI."""
+    A SAD run reviewed on the main page counts the same thing (unless a reviewer
+    has confirmed or changed it), plus anything left Unknown, so the number means
+    the same in both SAD flows. Description-only runs: unknowns, and statuses still
+    resting on unreviewed AI."""
     if gi.status == ControlStatus.NOT_APPLICABLE:
         return False
     if auto:
-        ev = gi.evidence
-        return gi.status == ControlStatus.PARTIAL and ev is not None and (
-            ev.ai_basis == "inferred" or ev.quote_verified is False or ev.quote_supports is False)
-    return gi.status == ControlStatus.UNKNOWN or gi.basis == EvidenceBasis.AI_UNREVIEWED
+        return _sad_flagged(gi)
+    if gi.status == ControlStatus.UNKNOWN:
+        return True
+    if from_sad:
+        return gi.basis == EvidenceBasis.AI_UNREVIEWED and _sad_flagged(gi)
+    return gi.basis == EvidenceBasis.AI_UNREVIEWED
 
 
 _REVIEWED = (EvidenceBasis.AI_CONFIRMED, EvidenceBasis.REVIEWER_OVERRIDE,
@@ -373,7 +386,7 @@ def summary_facts(r: ThreatModelReport) -> dict:
     n_silent = sum(1 for g in not_present if sad_silent(g))
     counts["sad_silent"] = n_silent
     auto = automated(r)
-    counts["to_verify"] = sum(1 for g in gi if needs_verification(g, auto))
+    counts["to_verify"] = sum(1 for g in gi if needs_verification(g, auto, r.sad is not None))
     counts["reviewed"] = None if auto else sum(1 for g in gi if g.basis in _REVIEWED)
 
     # ---- posture: a short, plain-language narrative (list of paragraphs) ----
@@ -515,6 +528,8 @@ def sad_facts(r: ThreatModelReport) -> dict | None:
                    for c in sc.completeness if c.score.value != "present"]
     limitations += list(sc.notes)
     limitations += [f"Figure not read: {s}" for s in sc.diagrams_skipped]
+    if r.architecture is None or r.architecture.empty:
+        limitations.append(NO_ARCH_NOTE)
     return {"rules": SAD_RULES_TEXT, "source": src, "facets": facets,
             "completeness": completeness, "limitations": limitations}
 
@@ -572,12 +587,13 @@ def focus_items(r: ThreatModelReport) -> dict:
     dread_by_threat = {d.threat_id: d for d in r.dread}
     worst: dict[str, tuple] = {}            # control id -> (score, priority, gap)
     for t in r.threats:
-        g = gap_by_id.get(t.enabling_gap or "")
         d = dread_by_threat.get(t.id)
-        if g is None or d is None or not g.is_finding:
-            continue
-        if g.control.id not in worst or d.average > worst[g.control.id][0]:
-            worst[g.control.id] = (d.average, d.priority.value, g)
+        for cid in t.gaps:
+            g = gap_by_id.get(cid)
+            if g is None or d is None or not g.is_finding:
+                continue
+            if g.control.id not in worst or d.average > worst[g.control.id][0]:
+                worst[g.control.id] = (d.average, d.priority.value, g)
     ranked = sorted(worst.values(), key=lambda x: (-x[0], 1 if sad_silent(x[2]) else 0))
 
     critical = [g for _sc, pr, g in ranked if pr == "Critical" and not sad_silent(g)]
@@ -673,9 +689,69 @@ def basis_facts(r: ThreatModelReport) -> dict | None:
     if n_unknown:
         limits.append(f"{n_unknown} control(s) are unknown: they are open questions, not "
                       f"findings, and are not reflected in the threats or DREAD scores.")
-    limits.append("The description and diagrams were not checked for completeness against the "
-                  "SAD checklist.")
-    return {"rows": rows, "limitations": limits}
+    comp = [(c.title, c.score.value.capitalize(),
+             (c.comment or "\u2014") if c.score.value != "present" else (c.evidence or "\u2014"))
+            for c in r.input_completeness]
+    if comp:
+        limits += [f"{c.title}: {c.score.value}" + (f" \u2014 {c.comment}" if c.comment else "")
+                   for c in r.input_completeness if c.score.value != "present"]
+    else:
+        limits.append("The description and diagrams were not checked for completeness against "
+                      "the SAD checklist.")
+    if r.architecture is None or r.architecture.empty:
+        limits.append(NO_ARCH_NOTE)
+    return {"rows": rows, "limitations": limits, "completeness": comp}
+
+
+
+
+# --------------------------------------------------------------------------- #
+# System context, threats and action plan (shared by both renderers)
+# --------------------------------------------------------------------------- #
+NO_ARCH_NOTE = ("No architecture summary was available, so threats rest on the control "
+                "gaps alone and do not name this system's components.")
+_ARCH_LABELS = (("components", "Components"), ("entry_points", "Entry points"),
+                ("data_stores", "Data stores"), ("external_integrations", "External integrations"),
+                ("data_flows", "Data flows"), ("trust_boundaries", "Trust boundaries"))
+
+
+def architecture_rows(r: ThreatModelReport) -> list[tuple[str, str]]:
+    a = r.architecture
+    if a is None or a.empty:
+        return []
+    rows = [("Exposure", a.exposure)] if a.exposure else []
+    rows += [(label, "; ".join(getattr(a, key))) for key, label in _ARCH_LABELS
+             if getattr(a, key)]
+    return rows
+
+
+def threat_rows(r: ThreatModelReport) -> list[dict]:
+    rows = []
+    for t in r.threats:
+        bits = []
+        if t.actor or t.target:
+            bits.append(" \u2192 ".join(x for x in (t.actor, t.target) if x))
+        if t.impact:
+            bits.append(f"Impact: {t.impact}")
+        detail = ". ".join(bits)
+        if t.actor is None and t.target is None and t.impact is None:
+            detail = ""                     # offline threats: the title says it all
+        rows.append({"id": t.id, "stride": stride_label(t.stride), "title": t.title,
+                     "detail": detail, "gaps": ", ".join(t.gaps) or "\u2014",
+                     "maps": threat_fw(r, t) or "\u2014"})
+    return rows
+
+
+_PRIO_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+
+
+def action_rows(r: ThreatModelReport) -> list[dict]:
+    """Action plan sorted by timing (before go-live first), then priority."""
+    acts = sorted(r.actions, key=lambda a: (0 if a.timing == "Before go-live" else 1,
+                                            _PRIO_ORDER.get(a.priority, 9)))
+    return [{"id": a.id, "action": a.action, "closes": ", ".join(a.threat_ids) or "\u2014",
+             "controls": ", ".join(a.control_ids) or "\u2014", "priority": a.priority,
+             "timing": a.timing, "owner": a.owner} for a in acts]
 
 
 
@@ -739,6 +815,12 @@ def tile_legend(r: ThreatModelReport) -> str:
                 "the SAD only implies them, or the cited quote was not found in the SAD or "
                 "does not support the status (already counted under Partial). "
                 "Reviewed: Draft, because no person has reviewed this automated run.")
+    if r.sad is not None:
+        return ("To verify: Partial controls whose status still needs confirming, because "
+                "the SAD only implies them, or the cited quote was not found in the SAD or "
+                "does not support the status, and that no reviewer has confirmed; plus any "
+                "control left Unknown. "
+                "Reviewed: controls whose status a reviewer has confirmed or set.")
     return ("To verify: controls whose status is still Unknown, plus statuses that rest on "
             "an AI evaluation no reviewer has confirmed. "
             "Reviewed: controls whose status a reviewer has confirmed or set.")
@@ -827,6 +909,12 @@ def _basis_md(r: ThreatModelReport) -> list[str]:
     out.append("")
     if r.diagrams_read or r.diagrams_skipped:
         out.append(diagrams_line(r) + "\n")
+    if b["completeness"]:
+        out.append("### Input completeness (SAD checklist, warns only)\n")
+        out.append("| Item | Result | Evidence or what is missing |")
+        out.append("|---|---|---|")
+        out += [f"| {a} | {c} | {_cell(d)} |" for a, c, d in b["completeness"]]
+        out.append("")
     out.append("### Limitations of this assessment\n")
     out += [f"- {_md(x)}" for x in b["limitations"]]
     out.append("")
@@ -878,48 +966,64 @@ def render_markdown(r: ThreatModelReport) -> str:
         out.append("*No findings — every expected control is confirmed in place.*")
     out.append("")
 
+    # System context: what the threats are built on
+    arch = architecture_rows(r)
+    if arch:
+        out.append("## System context\n")
+        out.append("| Item | Details |")
+        out.append("|---|---|")
+        out += [f"| {k} | {_cell(v)} |" for k, v in arch]
+        out.append("")
+
     # Threats
     out.append("## Threat model\n")
     if r.threats:
-        out.append("| ID | STRIDE | Threat | Enabling gap | Maps to |")
+        out.append("| ID | STRIDE | Threat | Gaps | Maps to |")
         out.append("|---|---|---|---|---|")
-        for t in r.threats:
-            out.append(f"| {t.id} | {stride_label(t.stride)} | {t.title} "
-                       f"| {t.enabling_gap or '—'} | {threat_fw(r, t) or '—'} |")
+        for x in threat_rows(r):
+            threat = _cell(x["title"]) + (f"<br>_{_cell(x['detail'])}_" if x["detail"] else "")
+            out.append(f"| {x['id']} | {x['stride']} | {threat} | {x['gaps']} | {x['maps']} |")
     else:
         out.append("*No findings — all expected controls implemented or unknown.*")
-    out.append("")
-
-    # Recommendations
-    out.append("## Recommendations (gap-closing)\n")
-    for rec in r.recommendations:
-        fw = f"  _{', '.join(fw_text(x) for x in rec.frameworks)}_" if rec.frameworks else ""
-        out.append(f"- **{rec.title}** ({rec.control_id}) — {rec.action}{fw}")
-    if not r.recommendations:
-        out.append("- None.")
-    out.append("")
-
-    # Mitigations
-    out.append("## Mitigations (threat-specific)\n")
-    for m in r.mitigations:
-        note = f"  _{m.note}_" if m.note else ""
-        out.append(f"- **{m.threat_id}** → {m.action}{note}")
-    if not r.mitigations:
-        out.append("- None.")
     out.append("")
 
     # DREAD
     out.append("## DREAD scoring\n")
     if r.dread:
-        out.append("| Threat | D | R | E | A | D | Avg | Priority |")
-        out.append("|---|---|---|---|---|---|---|---|")
-        for s in sorted(r.dread, key=lambda x: x.average, reverse=True):
-            out.append(f"| {s.threat_id} | {s.damage} | {s.reproducibility} | "
-                       f"{s.exploitability} | {s.affected_users} | {s.discoverability} "
-                       f"| {s.average} | {s.priority.value} |")
+        out.append("| Threat | D | R | E | A | D | Avg | Priority | Why |")
+        out.append("|---|---|---|---|---|---|---|---|---|")
+        for sc in sorted(r.dread, key=lambda x: x.average, reverse=True):
+            out.append(f"| {sc.threat_id} | {sc.damage} | {sc.reproducibility} | "
+                       f"{sc.exploitability} | {sc.affected_users} | {sc.discoverability} "
+                       f"| {sc.average} | {sc.priority.value} | {_cell(sc.rationale or '—')} |")
     else:
         out.append("*No scored threats.*")
     out.append("")
+
+    # Action plan (older engines produced recommendations + mitigations instead)
+    if r.actions:
+        out.append("## Action plan\n")
+        out.append("| # | Action | Closes | Controls | Priority | Timing | Owner |")
+        out.append("|---|---|---|---|---|---|---|")
+        for x in action_rows(r):
+            out.append(f"| {x['id']} | {_cell(x['action'])} | {x['closes']} | {x['controls']} "
+                       f"| {x['priority']} | {x['timing']} | {_cell(x['owner'])} |")
+        out.append("")
+    else:
+        out.append("## Recommendations (gap-closing)\n")
+        for rec in r.recommendations:
+            fw = f"  _{', '.join(fw_text(x) for x in rec.frameworks)}_" if rec.frameworks else ""
+            out.append(f"- **{rec.title}** ({rec.control_id}) — {rec.action}{fw}")
+        if not r.recommendations:
+            out.append("- None.")
+        out.append("")
+        out.append("## Mitigations (threat-specific)\n")
+        for m in r.mitigations:
+            note = f"  _{m.note}_" if m.note else ""
+            out.append(f"- **{m.threat_id}** → {m.action}{note}")
+        if not r.mitigations:
+            out.append("- None.")
+        out.append("")
 
     # Clarifications
     if r.clarifications:

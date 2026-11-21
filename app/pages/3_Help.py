@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from threatcatalog.help_example import EXAMPLE_CONTROL_ID, dread_example
+from threatcatalog.llm.prompts import DREAD_ANCHORS
 from threatcatalog.models import ControlStatus, DataClassification
 
 st.set_page_config(page_title="Help", layout="wide")
@@ -106,37 +107,48 @@ with dread_tab:
         "**1 (low) to 10 (high)**:")
 
     st.table(pd.DataFrame([
-        ("D", "Damage", "How bad is it if the attack succeeds?",
-         "Data exposed or altered, money lost, systems down. Higher for more sensitive data."),
-        ("R", "Reproducibility", "How reliably can the attack be repeated?",
-         "10 = works every time; 1 = needs rare timing or conditions."),
-        ("E", "Exploitability", "How much effort or skill does the attack take?",
-         "10 = a script or a stolen password; 1 = an expert with insider access."),
-        ("A", "Affected users", "How many users or systems are hit?",
-         "10 = everyone; 1 = a single user or an isolated component."),
-        ("D", "Discoverability", "How easy is the weakness to find?",
-         "10 = visible from outside or publicly known; 1 = needs deep internal knowledge."),
-    ], columns=["Letter", "Factor", "Question it answers", "How to think about the scale"]),
-        hide_index=True)
+        ("D", "Damage", "How bad is it if the attack succeeds?"),
+        ("R", "Reproducibility", "How reliably can the attack be repeated?"),
+        ("E", "Exploitability", "How much effort or skill does the attack take?"),
+        ("A", "Affected users", "How many users or systems are hit?"),
+        ("D", "Discoverability", "How easy is the weakness to find?"),
+    ], columns=["Letter", "Factor", "Question it answers"]), hide_index=True)
+
+    st.subheader("Score anchors")
+    st.markdown(
+        "Every AI engine is given these anchors, word for word, so a score means the "
+        "same thing on every run and every model:")
+    st.table(pd.DataFrame(
+        [(f, b, m[0].upper() + m[1:]) for f, bands in DREAD_ANCHORS for b, m in bands],
+        columns=["Factor", "Score", "Means"]), hide_index=True)
 
     st.subheader("From five scores to a priority")
     st.markdown("The app averages the five factors (rounded to two decimals):")
     st.latex(r"\text{DREAD average} = \frac{D + R + E + A + D}{5}")
     st.markdown("and maps the average to a priority band:")
     st.table(pd.DataFrame([
-        ("Critical", "7.5 or higher", "Fix before go-live / raise at ARB."),
-        ("High", "6.0 to 7.49", "Fix in the current delivery plan."),
-        ("Medium", "4.0 to 5.99", "Schedule; track to closure."),
-        ("Low", "below 4.0", "Accept or fix opportunistically."),
-    ], columns=["Priority", "Average", "Typical response"]), hide_index=True)
-    st.caption("The bands are fixed in the app. The 'typical response' column is a "
-               "suggested reading, not something the tool enforces.")
+        ("Critical", "7.5 or higher", "Before go-live"),
+        ("High", "6.0 to 7.49", "Before go-live if the control is not present; "
+                                "otherwise within 90 days"),
+        ("Medium", "4.0 to 5.99", "Within 90 days"),
+        ("Low", "below 4.0", "Within 90 days"),
+    ], columns=["Priority", "Average", "Action plan timing"]), hide_index=True)
+    st.caption("The bands are fixed in the app. In the action plan, each action takes the "
+               "worst priority of the threats that exploit its controls, and its timing "
+               "follows this table. The app sets both from the scores; the model does not.")
 
     st.subheader("How the app sets the five scores")
     st.markdown(
         "- **With an AI engine** (OpenAI, Anthropic, Bedrock), the model scores each "
-        "threat 1-10 per factor, told that a *missing* control scores higher on damage and "
-        "exploitability than a *partial* one, and that a compensating control lowers them.\n"
+        "threat 1-10 per factor against the anchors above. It sees the app profile, the "
+        "system's exposure (from System context), and each threat's target, impact and "
+        "evidence type (stated, inferred or SAD silent). It is told that:\n"
+        "    - a *missing* control scores higher than a *partial* one;\n"
+        "    - a compensating control lowers exploitability;\n"
+        "    - when the SAD does not mention a control, the gap is likely but unconfirmed, "
+        "so reproducibility and exploitability must not be raised for it;\n"
+        "    - it must use the full range, so threats do not all score alike.\n"
+        "  It also gives a one-line reason per threat (the **Why** column in the report).\n"
         "- **With the offline engine**, the scores follow fixed rules, shown below.\n"
         "- **Either way, the average and the priority band are calculated by the app**, "
         "never by the model, so the same five scores always give the same priority.")
@@ -148,6 +160,9 @@ with dread_tab:
         ("Data classification Confidential", "Damage +1"),
         ("Threat is Information Disclosure (STRIDE)", "Damage +1"),
         ("Threat is Denial of Service (STRIDE)", "Affected users +1"),
+        ("Control is PCI-mapped and PCI is in scope", "Damage +1"),
+        ("Control is recommended or conditional, not required", "Affected users −1"),
+        ("SAD does not mention the control (SAD silent)", "Reproducibility −1"),
         ("A compensating control was flagged", "Damage −2, Exploitability −2"),
         ("Every factor", "Kept between 1 and 10"),
     ], columns=["Condition", "Effect"]), hide_index=True)

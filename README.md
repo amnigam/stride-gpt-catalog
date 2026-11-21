@@ -9,7 +9,7 @@ missing.
 > **The one idea.** A curated catalog says what controls *should* be present for
 > an application's type. Evidence (an architecture diagram + a short declaration)
 > says what *is* present. The difference — computed in code, not by a model —
-> drives an executive summary, the threat model, recommendations, mitigations,
+> drives an executive summary, the threat model, an action plan,
 > DREAD scoring, and a PCI DSS v4.0.1 compliance view. Everything hangs off that gap.
 
 ### What a run actually produces
@@ -19,7 +19,8 @@ For a given application it yields, in one pass:
 - **key focus items** on page 1 — a security readiness marker (Ready / Ready with conditions / Not ready; tagged *Automated draft* for an unreviewed SAD run), items to address before go-live, risks for the business to consider, open questions and a prepared/reviewed-by block. It informs the ARB; it does not decide the outcome;
 - an **executive summary** (posture, one ranked list of top findings by DREAD, strengths) — for leadership;
 - a **findings register** — every expected control that is not present, partial or unknown (controls confirmed in place are listed with their evidence in the appendix); a control the SAD never mentions is marked *Not present (SAD silent)*;
-- a **threat model** (STRIDE) with **DREAD** scoring, **recommendations**, and **mitigations**;
+- a **system context** (components, entry points, data stores, integrations, data flows, trust boundaries, exposure) read from the SAD or from the description and diagrams, and carried in the declaration JSON;
+- a **threat model** (STRIDE) whose threats name the actor, the entry point or asset and the business impact, with **DREAD** scoring against an anchored rubric (one-line reason per score) and one **action plan** (action, threats closed, controls, priority, before go-live or within 90 days, owner);
 - a **PCI DSS v4.0.1** exposure view, produced from the same analysis;
 - **framework lineage** on every control — OWASP (Web, **LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8**;
 - a browsable, filterable **Control Catalog reference page** for the teams being assessed;
@@ -311,8 +312,8 @@ spend the whole budget on visible output and so tolerate a much smaller number.
 
 That is why the default is **32000** rather than something tighter. A
 `mcp + llm + llm_tools + agentic` profile puts 44 controls into every prompt and
-asks for a record per gap, across four separate calls (`generate_threats`,
-`generate_recommendations`, `generate_mitigations`, `score_dread`) plus one per
+asks for a record per gap, across three separate calls (`generate_threats`,
+`score_dread`, `generate_action_plan`) plus one per
 observed out-of-catalog control. Each call pays that cost independently.
 
 Set it in the sidebar, or in code:

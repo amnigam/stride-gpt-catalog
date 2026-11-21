@@ -22,7 +22,7 @@ def _report(declared_missing_ai):
 def test_report_has_core_sections(declared_missing_ai):
     md = render_markdown(_report(declared_missing_ai))
     for heading in ["# Threat Model", "## Findings register", "## Threat model",
-                    "## Recommendations", "## Mitigations", "## DREAD scoring",
+                    "## Action plan", "## DREAD scoring",
                     "## PCI DSS"]:
         assert heading in md
 

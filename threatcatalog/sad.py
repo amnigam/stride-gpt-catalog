@@ -27,9 +27,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from .architecture import parse_architecture
 from .declaration import DeclarationRow
 from .intake import quote_in_text
-from .models import (AICapability, AppProfile, CompletenessItem, Confidence, Control,
+from .models import (AICapability, AppProfile, ArchitectureSummary, CompletenessItem, Confidence, Control,
                      ControlEvidence, ControlStatus, DataClassification, FacetReason,
                      LedgerEntry, ObservedControl, PlatformFacet, Provenance, RubricScore,
                      SadContext)
@@ -87,6 +88,7 @@ class SadAssessment:
     document_title: str | None = None
     document_version: str | None = None
     notes: list[str] = field(default_factory=list)
+    architecture: ArchitectureSummary | None = None   # what threats are built on
 
     @property
     def stop_reasons(self) -> list[str]:
@@ -235,7 +237,8 @@ def parse_assessment(raw: dict, sad: ExtractedSad, fallback_name: str = "Applica
         completeness=items, facets=facets, platforms=platforms, ai_capabilities=ai,
         data_classification=dc, handles_cardholder_data=pci, application_name=name[:120],
         document_title=_s(raw.get("document_title")),
-        document_version=_s(raw.get("document_version")), notes=notes)
+        document_version=_s(raw.get("document_version")), notes=notes,
+        architecture=parse_architecture(raw.get("architecture")))
 
 
 def assess(engine, sad: ExtractedSad, fallback_name: str = "Application") -> SadAssessment:
@@ -386,7 +389,7 @@ def build_context(sad: ExtractedSad, a: SadAssessment, engine_label: str,
         engine=engine_label, document_title=a.document_title,
         document_version=a.document_version, completeness=a.completeness,
         facets=facets if facets is not None else a.facets, profile_confirmed_by=confirmed_by,
-        notes=notes, other_controls=list(other_controls or []),
+        notes=notes, other_controls=list(other_controls or []), architecture=a.architecture,
         generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat())
 
 
@@ -415,7 +418,7 @@ def run(sad: ExtractedSad, assessment: SadAssessment, profile: AppProfile, engin
                 for o in others[:MAX_OTHER_CONTROLS]]
     say("Generating threats, recommendations, mitigations and DREAD scores…")
     report = pipeline.run(profile, description="", declared=ledger, observed_unmatched=observed,
-                          engine=engine, controls=controls)
+                          engine=engine, controls=controls, architecture=assessment.architecture)
     report.sad = build_context(sad, assessment, engine_label, confirmed_by, facets, observed)
     if check_note:
         report.sad.notes.append(check_note)

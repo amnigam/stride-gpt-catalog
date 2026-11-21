@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from .models import (AppProfile, ControlStatus, DataClassification, DreadScore,
+from .models import (ActionItem, AppProfile, ArchitectureSummary, ControlStatus, DataClassification, DreadScore,
                      GapItem, LedgerEntry, Mitigation, ObservedControl,
                      OutOfCatalogAssessment, Recommendation, Stride, Threat)
 
@@ -39,19 +39,59 @@ class ArtifactEngine(Protocol):
     def detect_controls(self, expected, description: str = "",
                         diagram_image: bytes | None = None,
                         diagram_media_type: str = "image/png") -> list[LedgerEntry]: ...
-    def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]: ...
-    def generate_recommendations(self, gap: list[GapItem], profile: AppProfile) -> list[Recommendation]: ...
-    def generate_mitigations(self, threats: list[Threat], gap: list[GapItem],
-                             profile: AppProfile,
-                             compensating: list[OutOfCatalogAssessment]) -> list[Mitigation]: ...
-    def score_dread(self, threats: list[Threat], gap: list[GapItem],
-                    profile: AppProfile) -> list[DreadScore]: ...
+    def generate_threats(self, gap: list[GapItem], profile: AppProfile,
+                         architecture: ArchitectureSummary | None = None) -> list[Threat]: ...
+    def generate_action_plan(self, threats: list[Threat], gap: list[GapItem],
+                             profile: AppProfile, dread: list[DreadScore],
+                             architecture: ArchitectureSummary | None = None) -> list[ActionItem]: ...
+    def score_dread(self, threats: list[Threat], gap: list[GapItem], profile: AppProfile,
+                    architecture: ArchitectureSummary | None = None) -> list[DreadScore]: ...
     def judge_out_of_catalog(self, observed: ObservedControl,
                              profile: AppProfile) -> OutOfCatalogAssessment: ...
 
 
 def _clamp(n: int) -> int:
     return max(1, min(10, n))
+
+
+_PRIO_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+
+
+def action_priority(control_ids: list[str], threat_ids: list[str], gap: list[GapItem],
+                    threats: list[Threat], dread: list[DreadScore]) -> tuple[str, str]:
+    """Priority and timing for an action, from the DREAD scores, so the action plan
+    agrees with Key focus items. Priority is the worst DREAD priority of the threats
+    the action closes that exploit its controls (all threats exploiting its controls
+    when it names none of them), so grouping a minor fix with a critical control does
+    not make the whole action Critical. Timing is before go-live for Critical, or High on a missing
+    control; otherwise within 90 days."""
+    by_threat = {d.threat_id: d for d in dread}
+    status = {gi.control.id: gi.status for gi in gap}
+    linked = [t.id for t in threats if set(t.gaps) & set(control_ids)]
+    own = [x for x in threat_ids if x in linked] if control_ids else list(threat_ids)
+    tids = own or linked
+    prios = [by_threat[x].priority.value for x in tids if x in by_threat]
+    prio = min(prios, key=lambda p: _PRIO_ORDER.get(p, 9)) if prios else "High"
+    missing = any(status.get(c) == ControlStatus.NOT_PRESENT for c in control_ids)
+    timing = ("Before go-live" if prio == "Critical" or (prio == "High" and missing)
+              else "Within 90 days")
+    return prio, timing
+
+
+def default_actions(findings: list[GapItem], threats: list[Threat],
+                    dread: list[DreadScore], start: int = 1) -> list[ActionItem]:
+    """One action per finding control, from the control's intent. Used offline, and
+    to fill in any finding a model's action plan left out (nothing is dropped).
+    Priority and timing come from action_priority."""
+    out = []
+    for i, gi in enumerate(findings, start=start):
+        tids = [t.id for t in threats if gi.control.id in t.gaps]
+        prio, timing = action_priority([gi.control.id], tids, findings, threats, dread)
+        verb = "Put in place" if gi.status == ControlStatus.NOT_PRESENT else "Complete"
+        out.append(ActionItem(id=f"A{i}", action=f"{verb}: {gi.control.title}. {gi.control.intent}",
+                              threat_ids=tids, control_ids=[gi.control.id], priority=prio,
+                              timing=timing))
+    return out
 
 
 def _gap_by_control(gap: list[GapItem]) -> dict[str, GapItem]:
@@ -73,7 +113,9 @@ class DeterministicArtifactEngine:
         return detect_from_text(description, expected)
 
     # ---- threats ----
-    def generate_threats(self, gap: list[GapItem], profile: AppProfile) -> list[Threat]:
+    def generate_threats(self, gap: list[GapItem], profile: AppProfile,
+                         architecture: ArchitectureSummary | None = None) -> list[Threat]:
+        # Offline: one threat per gap (no architecture reasoning without a model).
         # not_present first, then partial — i.e. worst gaps surface first.
         findings = sorted([gi for gi in gap if gi.is_finding],
                           key=lambda gi: 0 if gi.status == ControlStatus.NOT_PRESENT else 1)
@@ -130,8 +172,13 @@ class DeterministicArtifactEngine:
                 addresses_control=t.enabling_gap, note=note))
         return mitigations
 
+    # ---- action plan (one action per finding control) ----
+    def generate_action_plan(self, threats, gap, profile, dread, architecture=None) -> list[ActionItem]:
+        return default_actions([gi for gi in gap if gi.is_finding], threats, dread)
+
     # ---- DREAD (gap-state modulates the score) ----
-    def score_dread(self, threats, gap, profile) -> list[DreadScore]:
+    def score_dread(self, threats, gap, profile, architecture=None) -> list[DreadScore]:
+        from .report import sad_silent
         gbc = _gap_by_control(gap)
         comp_strides: set[Stride] = set()  # filled by pipeline via mitigations? keep simple: none here
         scores: list[DreadScore] = []
@@ -150,14 +197,28 @@ class DeterministicArtifactEngine:
                 d += 1
             if t.stride == Stride.DOS:
                 a += 1
+            why = ["control not present" if missing else "control partial"]
+            if profile.data_classification in (DataClassification.RESTRICTED,
+                                               DataClassification.CONFIDENTIAL):
+                why.append(f"{profile.data_classification.value} data")
+            if gi and gi.pci_exposed:
+                d += 1
+                why.append("PCI-mapped")
+            if gi and gi.control.default_expectation.value != "required":
+                a -= 1
+                why.append("recommended, not required")
+            if gi and sad_silent(gi):
+                r -= 1
+                why.append("SAD silent, so unconfirmed")
             # compensating offset, if any was annotated on the gap item
             if gi and gi.compensating_notes:
                 e -= 2
                 d -= 2
+                why.append("compensating control noted")
             scores.append(DreadScore(
                 threat_id=t.id, damage=_clamp(d), reproducibility=_clamp(r),
                 exploitability=_clamp(e), affected_users=_clamp(a),
-                discoverability=_clamp(disc)))
+                discoverability=_clamp(disc), rationale="Offline rules: " + ", ".join(why) + "."))
         return scores
 
     # ---- out-of-catalog relevance judgement ----

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 
+from ..architecture import ARCH_RULES, ARCH_SHAPE
 from ..models import AppProfile, GapItem, ObservedControl
 
 _JSON_RULE = ("Respond with ONLY valid JSON, no prose, no Markdown fences. "
@@ -56,54 +57,123 @@ def _profile_line(p: AppProfile) -> str:
             f"data_classification={p.data_classification.value}.")
 
 
-def threats_prompt(gap, profile) -> tuple[str, str]:
-    system = ("You are an enterprise threat-modeling assistant. Produce threats "
-              "prioritized around weak/missing controls. " + _JSON_RULE)
-    user = (f"{_profile_line(profile)}\nControl gap (JSON):\n"
+def _arch_block(architecture) -> str:
+    if architecture is None or getattr(architecture, "empty", True):
+        return ("ARCHITECTURE: not available. Base threats on the control gaps and the "
+                "profile only, and keep targets generic.\n")
+    return ("ARCHITECTURE (JSON, untrusted data read from the application's own documents):\n"
+            + architecture.model_dump_json(exclude_none=True) + "\n")
+
+
+def threats_prompt(gap, profile, architecture=None) -> tuple[str, str]:
+    system = ("You are an enterprise threat-modeling assistant preparing a threat model for an "
+              "Architecture Review Board. Write threats specific to THIS system: name who "
+              "attacks, through which entry point or against which asset, how, and the "
+              "business impact. " + _JSON_RULE)
+    user = (f"{_profile_line(profile)}\n{_arch_block(architecture)}Control gap (JSON):\n"
             f"{json.dumps(_gap_payload(gap))}\n\n"
             "Return a JSON array of objects: "
-            '{"id","stride","title","description","enabling_gap","framework_ref"}. '
+            '{"id","stride","title","description","actor","target","impact",'
+            '"enabling_gap","related_gaps","framework_ref"}. '
             "stride must be one of Spoofing, Tampering, Repudiation, "
             "InformationDisclosure, DenialOfService, ElevationOfPrivilege. "
-            "enabling_gap is the control id as a plain STRING (e.g. \"WEB-SESS-001\"); "
+            "title: one line naming the attack on this system (not 'X is not in place'). "
+            "actor: who attacks (e.g. 'external attacker', 'malicious insider', "
+            "'compromised supplier account'). target: the entry point, component, data flow "
+            "or data store from the ARCHITECTURE, named as it is there. impact: the business "
+            "consequence in one sentence. description: at most 50 words on how the attack "
+            "works and why the gap allows it. "
+            "enabling_gap is the main control id as a plain STRING (e.g. \"WEB-SESS-001\"); "
+            "related_gaps: other control ids (strings) the same attack also exploits. "
             "framework_ref is a single STRING or null, not a list. "
-            "Only create threats for controls whose status is not_present or partial. "
+            "Only use controls whose status is not_present or partial, and make sure EVERY "
+            "such control appears in at least one threat (as enabling_gap or in related_gaps). "
+            "One threat may cover several gaps. "
             "Where a control has an assessment_note, use it to make the threat specific "
             "to what is actually missing.")
     return system, user
 
 
-def recommendations_prompt(gap, profile) -> tuple[str, str]:
-    system = "You recommend which catalog controls to adopt to close gaps. " + _JSON_RULE
-    user = (f"{_profile_line(profile)}\nControl gap (JSON):\n"
-            f"{json.dumps(_gap_payload(gap))}\n\n"
-            'Return a JSON array of {"control_id","title","action","frameworks"} '
-            "for each not_present or partial control.")
-    return system, user
-
-
-def mitigations_prompt(threats, gap, profile) -> tuple[str, str]:
-    system = "You propose concrete, threat-specific mitigations. " + _JSON_RULE
-    tlist = [{"id": t.id, "stride": t.stride.value, "title": t.title,
-              "enabling_gap": t.enabling_gap} for t in threats]
-    user = (f"{_profile_line(profile)}\nThreats:\n{json.dumps(tlist)}\n"
-            f"Gap:\n{json.dumps(_gap_payload(gap))}\n\n"
-            'Return a JSON array of {"threat_id","action","addresses_control","note"}. '
-            "If a compensating_note exists for the control, reflect that it only "
-            "softens (unverified, not baseline) in the note.")
-    return system, user
-
-
-def dread_prompt(threats, gap, profile) -> tuple[str, str]:
-    system = ("You score threats with DREAD (1-10 each). A missing control "
-              "scores higher on exploitability/damage than a partial one; a "
-              "compensating control lowers them. " + _JSON_RULE)
-    tlist = [{"id": t.id, "stride": t.stride.value, "enabling_gap": t.enabling_gap}
+def action_plan_prompt(threats, gap, profile, architecture=None) -> tuple[str, str]:
+    """One call for the action plan (replaces recommendations + mitigations)."""
+    system = ("You turn a threat model into an action plan a delivery team can work from. "
+              "Each action is concrete and specific to this system, not a restatement of a "
+              "control's definition. " + _JSON_RULE)
+    tlist = [{"id": t.id, "title": t.title, "target": t.target, "gaps": t.gaps}
              for t in threats]
-    user = (f"{_profile_line(profile)}\nThreats:\n{json.dumps(tlist)}\n"
+    user = (f"{_profile_line(profile)}\n{_arch_block(architecture)}Threats:\n{json.dumps(tlist)}\n"
             f"Gap:\n{json.dumps(_gap_payload(gap))}\n\n"
+            'Return a JSON array of {"action","threat_ids","control_ids"}. '
+            "action: at most 40 words: what to build or change, where (name the component), "
+            "and what done looks like. threat_ids and control_ids: lists of strings it closes. "
+            "Priority and timing are set by the tool from the DREAD scores, so do not return "
+            "them. Group closely related controls into one action. Every control whose status "
+            "is not_present or partial must appear in at least one action. If a "
+            "compensating_note exists for a control, say it only softens the finding "
+            "(unverified, not baseline).")
+    return system, user
+
+
+# Score anchors per DREAD factor: (factor, [(band, meaning), ...]). One source for the
+# prompt below and the Help page, so what the model is told and what users read agree.
+DREAD_ANCHORS = [
+    ("Damage", [("9-10", "Restricted/PCI data exposed at scale, payments or safety affected"),
+                ("6-8", "Confidential data or a key business process affected"),
+                ("3-5", "limited data or one function"),
+                ("1-2", "negligible")]),
+    ("Reproducibility", [("9-10", "works every time"),
+                         ("5-7", "needs timing or a specific state"),
+                         ("1-4", "rare conditions")]),
+    ("Exploitability", [("9-10", "no skill or access needed, tools exist"),
+                        ("6-8", "a valid account or moderate skill"),
+                        ("3-5", "insider access or chained steps"),
+                        ("1-2", "expert and privileged")]),
+    ("Affected users", [("9-10", "all users or all tenants"),
+                        ("5-7", "a large group"),
+                        ("1-4", "few")]),
+    ("Discoverability", [("9-10", "internet-facing and visible without signing in"),
+                         ("6-8", "visible to any signed-in user"),
+                         ("3-5", "needs internal knowledge"),
+                         ("1-2", "obscure")]),
+]
+
+# Rules the model applies on top of the anchors (also shown on the Help page).
+DREAD_RULES = [
+    "A missing control scores higher than a partial one.",
+    "A compensating control lowers exploitability.",
+    "evidence 'silent' means the document does not mention the control: the gap is "
+    "likely but unconfirmed, so do not raise reproducibility or exploitability for it.",
+    "Use the full range: threats must not all score alike.",
+]
+
+DREAD_RUBRIC = (
+    "Score each dimension 1-10 with these anchors. "
+    + " ".join(f"{f}: " + "; ".join(f"{b} = {m}" for b, m in bands) + "."
+               for f, bands in DREAD_ANCHORS)
+    + " " + " ".join(DREAD_RULES))
+
+
+def dread_prompt(threats, gap, profile, architecture=None) -> tuple[str, str]:
+    system = "You score threats with DREAD for an Architecture Review Board. " + _JSON_RULE
+    gbc = {gi.control.id: gi for gi in gap}
+
+    def ev_type(cid):
+        gi = gbc.get(cid or "")
+        if gi is None or gi.evidence is None:
+            return None
+        return gi.evidence.ai_basis or ("reviewed" if gi.evidence.reviewed else None)
+
+    tlist = [{"id": t.id, "stride": t.stride.value, "title": t.title,
+              "description": t.description, "target": t.target, "impact": t.impact,
+              "gaps": t.gaps, "evidence": ev_type(t.enabling_gap)} for t in threats]
+    exposure = getattr(architecture, "exposure", None) if architecture else None
+    user = (f"{_profile_line(profile)}\nExposure: {exposure or 'not stated'}\n"
+            f"Threats:\n{json.dumps(tlist)}\n"
+            f"Gap:\n{json.dumps(_gap_payload(gap))}\n\n"
+            + DREAD_RUBRIC + "\n"
             'Return a JSON array of {"threat_id","damage","reproducibility",'
-            '"exploitability","affected_users","discoverability"} (ints 1-10).')
+            '"exploitability","affected_users","discoverability","rationale"} (ints 1-10). '
+            "rationale: at most 25 words naming what drove the highest scores.")
     return system, user
 
 
@@ -139,7 +209,8 @@ def vision_prompt(expected) -> tuple[str, str]:
 
 
 def detect_prompt(expected, description: str = "", has_diagram: bool = False,
-                  diagram_labels: list[str] | None = None) -> tuple[str, str]:
+                  diagram_labels: list[str] | None = None,
+                  rubric: list[dict] | None = None) -> tuple[str, str]:
     """The Detect step: which expected controls are EVIDENCED in the description
     and/or diagram, with a short rationale and a cited source for each, so every
     AI suggestion arrives with the evidence a reviewer needs to check it.
@@ -182,14 +253,25 @@ def detect_prompt(expected, description: str = "", has_diagram: bool = False,
                  "them and the description, but report each control once.\n\n")
     diagram_quote = ("'Diagram N: <element or label you saw>' using the numbering above"
                      if multi else "name the diagram element or label you saw")
-    user += ("Using " + " and ".join(sources) + ", return a JSON array of "
-             '{"control_id","status","confidence","source","quote","rationale"} ONLY for '
-             "controls with evidence. status is 'implemented' or 'partial'; confidence is "
+    user += ("Using " + " and ".join(sources) + ", return ONE JSON object:\n"
+             '{"controls": [{"control_id","status","confidence","source","quote","rationale"}], '
+             + ARCH_SHAPE
+             + (', "completeness": [{"id", "score": "present"|"thin"|"missing", "evidence", '
+                '"comment"}]' if rubric else "") + "}.\n"
+             "controls: ONLY controls with evidence. status is 'implemented' or 'partial'; "
+             "confidence is "
              "'low' | 'medium' | 'high'; source is 'description' or 'diagram'. quote: for "
              "source 'description', copy the supporting sentence VERBATIM from the "
              "description (no paraphrase); for 'diagram', " + diagram_quote + ". "
              "rationale: at most 40 words on why this evidence supports "
-             "the status, and for 'partial' what is missing.")
+             "the status, and for 'partial' what is missing.\n" + ARCH_RULES)
+    if rubric:
+        user += ("\ncompleteness: score EVERY item of this checklist (JSON) for how well the "
+                 "description and diagrams cover it: " + json.dumps(rubric) + ". 'present' = "
+                 "clearly covered; 'thin' = mentioned but too vague to threat model; "
+                 "'missing' = absent. evidence: a short verbatim quote or 'Diagram N'. "
+                 "comment: for thin/missing, what the author should add (one sentence). This "
+                 "checklist only informs the report; it never changes a control.")
     return system, user
 
 
@@ -243,7 +325,8 @@ def sad_assess_prompt(text: str, rubric: list[dict], platforms: list[str], ai_ti
              '"reason", "quote"}],\n'
              ' "data_classification": {"value": "Public"|"Internal"|"Confidential"|"Restricted"|'
              '"not_stated", "reason", "quote"},\n'
-             ' "cardholder_data": {"value": "yes"|"no"|"not_stated", "reason", "quote"}}\n\n'
+             ' "cardholder_data": {"value": "yes"|"no"|"not_stated", "reason", "quote"},\n'
+             ' ' + ARCH_SHAPE + '}\n\n'
              "Rules: score EVERY rubric id. 'present' = clearly covered; 'thin' = mentioned "
              "but too vague to threat model; 'missing' = absent. evidence: a short verbatim "
              "quote, a section heading, or 'Diagram N'. comment: for thin/missing, what the "
@@ -252,7 +335,7 @@ def sad_assess_prompt(text: str, rubric: list[dict], platforms: list[str], ai_ti
              "it (basis 'inferred'); when unsure, select it with basis 'inferred'. reason: at "
              "most 25 words. quote: verbatim from the text, or 'Diagram N: <label>'. "
              "is_architecture_document is false only when the file is clearly not an "
-             "architecture/design document of a system.")
+             "architecture/design document of a system. " + ARCH_RULES)
     return system, user
 
 

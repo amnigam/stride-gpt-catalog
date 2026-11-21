@@ -45,12 +45,18 @@ def test_unknown_stride_coerced_to_default(tiny_controls, web_llm_profile):
     assert t.stride.value == "Tampering"
 
 
-def test_recommendations_validated(tiny_controls, web_llm_profile):
-    raw = StubRawLLM([[{"control_id": "X-AI-1", "title": "Adopt", "action": "do it",
-                        "frameworks": ["owasp_llm:LLM01:2025"]}]])
+def test_action_plan_validated(tiny_controls, web_llm_profile):
+    raw = StubRawLLM([[{"action": "Add prompt-injection filtering at the gateway",
+                        "threat_ids": "T1", "control_ids": ["X-AI-1"],
+                        "priority": "critical", "timing": "before go-live"},
+                       {"action": ""},                         # dropped: no action text
+                       {"action": "Later", "priority": "urgent", "timing": "soon"}]])
     eng = LLMArtifactEngine(raw)
-    recs = eng.generate_recommendations(_gap(tiny_controls, web_llm_profile), web_llm_profile)
-    assert recs[0].control_id == "X-AI-1"
+    acts = eng.generate_action_plan([], _gap(tiny_controls, web_llm_profile), web_llm_profile, [])
+    assert [a.control_ids for a in acts] == [["X-AI-1"], []]
+    assert acts[0].threat_ids == ["T1"] and acts[0].priority == "Critical"
+    assert acts[0].timing == "Before go-live"
+    assert (acts[1].priority, acts[1].timing) == ("High", "Within 90 days")
 
 
 def test_ooc_assessment_validated(web_llm_profile):
@@ -155,11 +161,15 @@ def test_dread_out_of_range_clamped(tiny_controls, web_llm_profile):
     assert s.damage == 10                         # clamped, not rejected
 
 
-def test_recommendation_frameworks_string_to_list(tiny_controls, web_llm_profile):
-    raw = StubRawLLM([[{"control_id": "X-AI-1", "title": "Adopt", "action": "do",
-                        "frameworks": "owasp_llm:LLM01:2025"}]])
-    r = LLMArtifactEngine(raw).generate_recommendations(_gap(tiny_controls, web_llm_profile), web_llm_profile)[0]
-    assert r.frameworks == ["owasp_llm:LLM01:2025"]
+def test_threat_architecture_fields_parsed(tiny_controls, web_llm_profile):
+    raw = StubRawLLM([[{"id": "T1", "stride": "Spoofing", "title": "Hijack supplier sessions",
+                        "description": "d", "actor": "external attacker",
+                        "target": "Supplier portal", "impact": "Payment fraud",
+                        "enabling_gap": "X-AI-1", "related_gaps": "X-WEB-1"}]])
+    t = LLMArtifactEngine(raw).generate_threats(_gap(tiny_controls, web_llm_profile),
+                                                web_llm_profile)[0]
+    assert (t.actor, t.target, t.impact) == ("external attacker", "Supplier portal", "Payment fraud")
+    assert t.gaps == ["X-AI-1", "X-WEB-1"]
 
 
 def test_ooc_bad_layer_becomes_none(web_llm_profile):

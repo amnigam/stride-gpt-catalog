@@ -36,10 +36,11 @@ from threatcatalog.declaration import (BASIS_LABEL, DeclarationRow,
                                        evidence_basis, export_json, import_json,
                                        needs_note, profile_differences,
                                        reviewed_sad_context, sad_handoff, to_ledger)
+from threatcatalog.architecture import parse_architecture
 from threatcatalog.intake import detect_from_text
 from threatcatalog.llm.factory import BEDROCK, OFFLINE, default_model
 from threatcatalog.llm.factory import build_engine as _factory_build
-from threatcatalog.models import (AICapability, AppProfile,
+from threatcatalog.models import (AICapability, AppProfile, CompletenessItem,
                                   DataClassification, LedgerEntry,
                                   ObservedControl, PlatformFacet)
 from threatcatalog.report import render_markdown
@@ -179,6 +180,8 @@ def _keyword_detect() -> list[LedgerEntry]:
 
 if st.button("🔍 Detect controls from diagrams + description"):
     detected: list[LedgerEntry] = []
+    st.session_state["_detect_arch"] = None          # a new Detect replaces what the last one read
+    st.session_state["_detect_completeness"] = []
     read: list[str] = []
     if engine_choice != "Deterministic (offline)" and (description.strip() or diagrams):
         try:
@@ -190,6 +193,11 @@ if st.button("🔍 Detect controls from diagrams + description"):
                     expected, description,
                     diagrams=[(d.data, d.media_type, d.label) for d in diagrams])
             read = [d.label for d in diagrams]
+            # the same call summarised the architecture and scored the completeness
+            # checklist: kept for the report (they never change a control)
+            extras = getattr(eng, "last_detect_extras", None) or {}
+            st.session_state["_detect_arch"] = extras.get("architecture")
+            st.session_state["_detect_completeness"] = list(extras.get("completeness") or [])
         except Exception as exc:                 # noqa: BLE001 — surface model/auth errors
             st.warning(f"AI detection failed ({exc}). Fell back to keyword matching on "
                        "the description.")
@@ -293,8 +301,14 @@ def _declaration_table() -> None:
         c1, c2 = st.columns([1, 2])
         c1.download_button(
             "💾 Save declaration (JSON)",
-            export_json(rows, meta={"application": profile.name,
-                                    "reviewer": st.session_state.get("reviewer") or None}),
+            export_json(rows, meta={
+                "application": profile.name,
+                "reviewer": st.session_state.get("reviewer") or None,
+                # keep what Detect read, so a reloaded review still builds the same threats
+                "architecture": (st.session_state["_detect_arch"].model_dump(mode="json")
+                                 if st.session_state.get("_detect_arch") else None),
+                "completeness": [c.model_dump(mode="json") for c in
+                                 st.session_state.get("_detect_completeness") or []]}),
             file_name=f"{profile.name.replace(' ', '_')}_declaration.json",
             mime="application/json")
         upload = c2.file_uploader("Load a saved declaration", type=["json"], key="decl_upload",
@@ -317,6 +331,10 @@ def _declaration_table() -> None:
                     st.session_state["_detected"] = {}
                     h = sad_handoff(meta)
                     st.session_state["_handoff"] = h
+                    st.session_state["_detect_arch"] = parse_architecture(meta.get("architecture"))
+                    st.session_state["_detect_completeness"] = [
+                        CompletenessItem.model_validate(c) for c in meta.get("completeness") or []
+                        if isinstance(c, dict)]
                     if h is not None:
                         p = h.profile
                         pending = {
@@ -478,9 +496,14 @@ if st.button("Run threat model", type="primary"):
         st.stop()
     try:
         # diagrams already incorporated via Detect -> declaration; don't re-read them here
+        # threats build on the SAD's architecture (flow 2) or on what Detect read (flow 3)
+        arch = ((_handoff.sad.architecture if (_handoff is not None and _handoff.sad) else None)
+                or st.session_state.get("_detect_arch"))
         report = pipeline.run(profile, description=description, declared=declared,
                               observed_unmatched=observed, engine=engine,
-                              controls=catalog.controls)
+                              controls=catalog.controls, architecture=arch)
+        if _handoff is None:
+            report.input_completeness = list(st.session_state.get("_detect_completeness") or [])
         if _handoff is not None:   # keep the SAD record, marked as reviewed
             report.sad = reviewed_sad_context(_handoff, profile,
                                               st.session_state.get("reviewer"))
