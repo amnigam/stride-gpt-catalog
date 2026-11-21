@@ -30,7 +30,7 @@ from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTe
                                 Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
-from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, document_control, evidence_fields, evidence_groups,
+from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, basis_facts, focus_items, document_control, evidence_fields, evidence_groups,
                      evidence_note, fw_text, out_of_catalog_rows, pci_groups,
                      register_columns, register_rows, sad_banner, sad_facts, stride_label,
                      summary_facts, threat_fw)
@@ -208,7 +208,9 @@ def _stat_strip(counts, ss):
         ("Confirmed in place", counts["implemented"], _GREEN, colors.HexColor("#e6f6ef")),
         ("Not present", counts["not_present"], _RED, colors.HexColor("#fbeae9")),
         ("Partial", counts["partial"], _AMBER, colors.HexColor("#fdf3e7")),
-        ("To verify", counts["unknown"], _GREY, _BAND),
+        ("To verify", counts["to_verify"], _GREY, _BAND),
+        ("Reviewed", "Draft" if counts["reviewed"] is None
+         else f"{counts['reviewed']}/{counts['expected']}", _NAVY, _BAND),
     ]
     cells = []
     for label, num, col, _bg in spec:
@@ -216,7 +218,7 @@ def _stat_strip(counts, ss):
             f'<font size="15" color="{col.hexval()}"><b>{num}</b></font><br/>'
             f'<font size="7.5" color="{_GREY.hexval()}">{escape(label)}</font>',
             ss["StatNum"]))
-    t = Table([cells], colWidths=[3.48 * cm] * len(spec))
+    t = Table([cells], colWidths=[2.9 * cm] * len(spec))
     style = [("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
              ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -225,6 +227,46 @@ def _stat_strip(counts, ss):
         style.append(("BACKGROUND", (i, 0), (i, 0), bg))
     t.setStyle(TableStyle(style))
     return t
+
+
+_READY_COLOR = {"Ready": _GREEN, "Ready with conditions": _AMBER, "Not ready": _RED}
+
+
+def _focus_block(r, ss):
+    f = focus_items(r)
+    col = _READY_COLOR.get(f["readiness"], _GREY)
+    el = [Paragraph("Key focus items", ss["H2"]),
+          Paragraph(f'<font color="{_GREY.hexval()}">{escape(f["note"])}</font>', ss["Body"])]
+    tag = (f' &nbsp;<font color="{_AMBER.hexval()}"><b>{escape(f["tag"])}</b></font>'
+           if f["tag"] else "")
+    marker = Table([[Paragraph(
+        f'<font color="{col.hexval()}"><b>Security readiness: {escape(f["readiness"])}</b>'
+        f'</font>{tag}<br/><font size="8" color="{_GREY.hexval()}">'
+        f'{escape("; ".join(f["reasons"]).capitalize())}</font>', ss["Body"])]],
+        colWidths=[_CARD_W])
+    marker.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _BAND), ("LINEBEFORE", (0, 0), (0, -1), 3.5, col),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9)]))
+    el.append(marker)
+    for key, title in (("before_go_live", "Address before go-live"),
+                       ("business_risks", "Risks for the business to consider"),
+                       ("open_questions", "Open questions for the team")):
+        items, more = f[key]
+        if not items:
+            continue
+        el.append(Paragraph(title, ss["Lead"]))
+        for cid, t, why in items:
+            el.append(Paragraph(f"<b>{escape(cid)}</b> {escape(t)} "
+                                f'<font color="{_GREY.hexval()}">({escape(why)})</font>',
+                                ss["Bull"], bulletText="\u2022"))
+        if more:
+            el.append(Paragraph(f"…and {more} more (see the findings register)", ss["Bull"],
+                                bulletText="\u2022"))
+    el.append(Spacer(1, 4))
+    el.append(_table([["Role", "Name", "Date"]] + [[role, name, ""] for role, name in f["people"]],
+                     [6.0 * cm, 7.5 * cm, 3.0 * cm], ss))
+    return el
 
 
 def _register_table(r, rows, ss):
@@ -263,12 +305,6 @@ def render_pdf(r: ThreatModelReport) -> bytes:
     if dc:
         el.append(Paragraph(" &nbsp;|&nbsp; ".join(f"{escape(k)}: {escape(v)}" for k, v in dc),
                             ss["Meta"]))
-    if r.sad is None and (r.diagrams_read or r.diagrams_skipped):
-        read = "; ".join(f"Diagram {i + 1}: {d}" for i, d in enumerate(r.diagrams_read)) or "none"
-        txt = escape(f"Diagrams read ({len(r.diagrams_read)}): {read}")
-        if r.diagrams_skipped:
-            txt += " &nbsp;|&nbsp; " + escape("Not read: " + "; ".join(r.diagrams_skipped))
-        el.append(Paragraph(txt, ss["Meta"]))
     el.append(HRFlowable(width="100%", thickness=1.4, color=_TEAL, spaceBefore=4, spaceAfter=8))
     banner = sad_banner(r)
     if banner is not None:
@@ -278,6 +314,9 @@ def render_pdf(r: ThreatModelReport) -> bytes:
     # ---- summary stat strip ----
     el.append(_stat_strip(f["counts"], ss))
     el.append(Spacer(1, 6))
+
+    # ---- key focus items: informs the ARB, never directs it ----
+    el.extend(_focus_block(r, ss))
 
     # ---- executive summary (narrative paragraphs) ----
     el.append(Paragraph("Executive summary", ss["H2"]))
@@ -329,6 +368,18 @@ def render_pdf(r: ThreatModelReport) -> bytes:
             el.append(Paragraph("Limitations of this assessment", ss["Lead"]))
             for x in sf["limitations"]:
                 el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
+
+    # ---- assessment basis for a review-page run with no SAD ----
+    bf = basis_facts(r)
+    if bf is not None:
+        el.append(Paragraph("Assessment basis", ss["H2"]))
+        el.append(_table([["Item", "Value"]] + [list(x) for x in bf["rows"]],
+                         [4.0 * cm, 12.5 * cm], ss))
+        if r.diagrams_skipped:
+            el.append(Paragraph(escape("Not read: " + "; ".join(r.diagrams_skipped)), ss["Meta"]))
+        el.append(Paragraph("Limitations of this assessment", ss["Lead"]))
+        for x in bf["limitations"]:
+            el.append(Paragraph(escape(x), ss["Bull"], bulletText="\u2022"))
 
     # ---- findings register (gaps + unknowns; the full list is in the appendix) ----
     el.append(Paragraph("Findings register", ss["H2"]))

@@ -89,4 +89,5 @@ def run(profile: AppProfile,
         pci_view=pci_view, candidates=candidates,
         compensating=[a for a in assessments if a.relevant and a.compensating],
         generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        tool_version=__version__, catalog_version=catalog_version(controls))
+        tool_version=__version__, catalog_version=catalog_version(controls),
+        description_words=len(description.split()) if description else 0)

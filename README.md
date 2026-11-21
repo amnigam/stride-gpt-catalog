@@ -16,6 +16,7 @@ missing.
 
 For a given application it yields, in one pass:
 
+- **key focus items** on page 1 — a security readiness marker (Ready / Ready with conditions / Not ready; tagged *Automated draft* for an unreviewed SAD run), items to address before go-live, risks for the business to consider, open questions and a prepared/reviewed-by block. It informs the ARB; it does not decide the outcome;
 - an **executive summary** (posture, one ranked list of top findings by DREAD, strengths) — for leadership;
 - a **findings register** — every expected control that is not present, partial or unknown (controls confirmed in place are listed with their evidence in the appendix); a control the SAD never mentions is marked *Not present (SAD silent)*;
 - a **threat model** (STRIDE) with **DREAD** scoring, **recommendations**, and **mitigations**;

@@ -76,6 +76,7 @@ def apply_detection(rows: dict[str, DeclarationRow], detected: list[LedgerEntry]
             ev.ai_confidence = e.confidence
             ev.ai_source = d.ai_source or e.provenance.value
             ev.ai_note = d.ai_note or e.evidence
+            ev.ai_basis = d.ai_basis
             ev.ai_quote = d.ai_quote
             ev.quote_verified = d.quote_verified
             ev.quote_supports = d.quote_supports
@@ -85,6 +86,7 @@ def apply_detection(rows: dict[str, DeclarationRow], detected: list[LedgerEntry]
             ev.ai_confidence = None
             ev.ai_source = None
             ev.ai_note = None
+            ev.ai_basis = None
             ev.ai_quote = None
             ev.quote_verified = None
             ev.quote_supports = None
