@@ -114,22 +114,43 @@ def action_plan_prompt(threats, gap, profile, architecture=None) -> tuple[str, s
     return system, user
 
 
+# Score anchors per DREAD factor: (factor, [(band, meaning), ...]). One source for the
+# prompt below and the Help page, so what the model is told and what users read agree.
+DREAD_ANCHORS = [
+    ("Damage", [("9-10", "Restricted/PCI data exposed at scale, payments or safety affected"),
+                ("6-8", "Confidential data or a key business process affected"),
+                ("3-5", "limited data or one function"),
+                ("1-2", "negligible")]),
+    ("Reproducibility", [("9-10", "works every time"),
+                         ("5-7", "needs timing or a specific state"),
+                         ("1-4", "rare conditions")]),
+    ("Exploitability", [("9-10", "no skill or access needed, tools exist"),
+                        ("6-8", "a valid account or moderate skill"),
+                        ("3-5", "insider access or chained steps"),
+                        ("1-2", "expert and privileged")]),
+    ("Affected users", [("9-10", "all users or all tenants"),
+                        ("5-7", "a large group"),
+                        ("1-4", "few")]),
+    ("Discoverability", [("9-10", "internet-facing and visible without signing in"),
+                         ("6-8", "visible to any signed-in user"),
+                         ("3-5", "needs internal knowledge"),
+                         ("1-2", "obscure")]),
+]
+
+# Rules the model applies on top of the anchors (also shown on the Help page).
+DREAD_RULES = [
+    "A missing control scores higher than a partial one.",
+    "A compensating control lowers exploitability.",
+    "evidence 'silent' means the document does not mention the control: the gap is "
+    "likely but unconfirmed, so do not raise reproducibility or exploitability for it.",
+    "Use the full range: threats must not all score alike.",
+]
+
 DREAD_RUBRIC = (
     "Score each dimension 1-10 with these anchors. "
-    "Damage: 9-10 = Restricted/PCI data exposed at scale, payments or safety affected; "
-    "6-8 = Confidential data or a key business process affected; 3-5 = limited data or one "
-    "function; 1-2 = negligible. "
-    "Reproducibility: 9-10 = works every time; 5-7 = needs timing or a specific state; "
-    "1-4 = rare conditions. "
-    "Exploitability: 9-10 = no skill or access needed, tools exist; 6-8 = a valid account "
-    "or moderate skill; 3-5 = insider access or chained steps; 1-2 = expert and privileged. "
-    "Affected users: 9-10 = all users or all tenants; 5-7 = a large group; 1-4 = few. "
-    "Discoverability: 9-10 = internet-facing and visible without signing in; 6-8 = visible "
-    "to any signed-in user; 3-5 = needs internal knowledge; 1-2 = obscure. "
-    "A missing control scores higher than a partial one; a compensating control lowers "
-    "exploitability. evidence 'silent' means the document does not mention the control: "
-    "the gap is likely but unconfirmed, so do not raise reproducibility or exploitability "
-    "for it. Use the full range: threats must not all score alike.")
+    + " ".join(f"{f}: " + "; ".join(f"{b} = {m}" for b, m in bands) + "."
+               for f, bands in DREAD_ANCHORS)
+    + " " + " ".join(DREAD_RULES))
 
 
 def dread_prompt(threats, gap, profile, architecture=None) -> tuple[str, str]:
