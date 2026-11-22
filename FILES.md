@@ -11,7 +11,12 @@ isn't part of the project — delete it.
 | `pyproject.toml` | Package metadata, dependencies, optional extras (`llm`, `openai`, `app`, `dev`), pytest config. |
 | `requirements.txt` | Core runtime deps (pydantic, PyYAML). Optional extras are commented. |
 | `.gitignore` | Keeps caches/venvs/build junk out of the repo (so the root stays clean). |
-| `app/streamlit_app.py` | The UI. Engine + model picker, API-key field, diagram upload, detect-and-prefill, declaration, report. |
+| `app/streamlit_app.py` | UI entry point (`streamlit run app/streamlit_app.py`): registers the four pages with their sidebar titles. |
+| `app/review.py` | **Threat Model Review** page. Engine + model picker, API-key field, diagram upload, detect-and-prefill, declaration (or a SAD run's JSON), report. |
+| `.streamlit/config.toml` | Streamlit settings: no usage statistics sent, no Deploy button. Read when you start the app from the repository root. |
+| `.env.example` | Template for a local, git-ignored `.env` holding API keys. |
+| `uv.lock` | Exact versions of every dependency, used by `uv sync`. |
+| `NOTICE.md` | Where the project comes from and its relation to STRIDE-GPT. |
 | `app/pages/2_SAD_Threat_Model.py` | Upload a solution architecture document (DOCX/PDF/MD) → completeness check → confirm profile → automated threat model. |
 | `app/pages/1_Control_Catalog.py` | Reference page (sidebar nav) — browsable/filterable description of every control, generated from the catalog; exportable to Markdown. |
 | `app/pages/3_Help.py` | Help: which page to use (SAD vs description + diagram) and the DREAD scoring guide with a worked example computed by the real scorer (`threatcatalog/help_example.py`). |
@@ -49,8 +54,9 @@ isn't part of the project — delete it.
 | `testapp/halcyon-claimpilot/` | Sample app B, an agentic AI claims app on AWS (agents, tools, MCP, RAG, Kafka, EKS, fine-tuning, PCI): SAD (DOCX + PDF, 3 diagrams), description + diagrams, answer key. |
 | `testapp/marlowe-shift-reporter/` | Minimal demo app C, an on-prem scheduled reporting job (37 controls, onprem only): SAD (DOCX + PDF), description + diagram, answer key. |
 | `testapp/northfield-sms-reminders/` | Minimal demo app D, serverless SMS reminders on Google Cloud (42 controls, cloud only): SAD (DOCX + PDF), description + diagram, answer key. |
+| `testapp/PaymentGateway*`, `testapp/BankLedgerPro_OnPrem*`, `testapp/AegisPress*` | Early sample inputs for the main page (a description and a diagram each, no answer key). |
 | `testapp/sources/` | Sources and build scripts for the four samples (Markdown SADs, diagram code, answer keys). Rebuild with `build_diagrams.py`, `build_docs.py`, `build_answer_keys.py`. |
 | `examples/peopledesk_report.md` | A sample generated report (offline engine). |
 
 ## Tests (`tests/`)
-One file per engine area; 230 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.
+One file per engine area; 237 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.

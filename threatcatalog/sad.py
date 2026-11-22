@@ -416,7 +416,7 @@ def run(sad: ExtractedSad, assessment: SadAssessment, profile: AppProfile, engin
         check_note = apply_quote_check(engine, ledger, expected)
     observed = [ObservedControl(name=o["name"], description=o.get("description", ""))
                 for o in others[:MAX_OTHER_CONTROLS]]
-    say("Generating threats, recommendations, mitigations and DREAD scores…")
+    say("Generating threats, DREAD scores and the action plan…")
     report = pipeline.run(profile, description="", declared=ledger, observed_unmatched=observed,
                           engine=engine, controls=controls, architecture=assessment.architecture)
     report.sad = build_context(sad, assessment, engine_label, confirmed_by, facets, observed)

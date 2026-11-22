@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "threatcatalog"
 version = "0.1.0"
-description = "Catalog-driven, gap-based threat modeling engine (STRIDE-GPT fork enhancement)"
+description = "Catalog-driven, gap-based threat modeling engine (inspired by STRIDE-GPT)"
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.5", "PyYAML>=6.0"]
 

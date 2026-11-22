@@ -12,7 +12,7 @@
   assessment_signal: Are connected MCP servers verified for provenance/trust before use?
   threat_frameworks:
   - framework: owasp_mcp
-    ref: MCP01:2025
+    ref: MCP04:2025
     version: beta-phase3
   - framework: cis_v8
     ref: Control 15
@@ -34,7 +34,7 @@
   assessment_signal: Are MCP credentials scoped per-server with no token passthrough?
   threat_frameworks:
   - framework: owasp_mcp
-    ref: MCP05:2025
+    ref: MCP01:2025
     version: beta-phase3
   - framework: cis_v8
     ref: Control 6
@@ -78,6 +78,9 @@
   - mcp logging
   - mcp audit
   threat_frameworks:
+  - framework: owasp_mcp
+    ref: MCP08:2025
+    version: beta-phase3
   - framework: cis_v8
     ref: Control 8
     version: '8.1'

@@ -96,7 +96,7 @@ output-token budget than a plain web app — see
 ```
   facets ─► resolve ─► expected controls ┐
                                          ├─► gap engine ─► exec summary / threats /
-  diagram + description + declaration ───┘   (deterministic)  recs / mitigations / DREAD
+  diagram + description + declaration ───┘   (deterministic)  DREAD / action plan
                                                            └─► PCI DSS v4.0.1 view
               out-of-catalog controls ──► judge ──► compensating + catalog candidates
 ```
@@ -116,7 +116,8 @@ output-token budget than a plain web app — see
 | `pipeline.py` | orchestration → `ThreatModelReport` | ✅ |
 | `report.py` | Markdown rendering + shared executive-summary facts | ✅ |
 | `pdf_export.py` | PDF rendering (reportlab; optional `[pdf]` extra) | ✅ |
-| `app/streamlit_app.py` | UI: detect-from-diagram, declare, run, download | — |
+| `app/streamlit_app.py` | UI entry point: registers the pages with their sidebar titles | — |
+| `app/review.py` | **Threat Model Review** page: detect-from-diagram, declare, review a SAD run, run, download | — |
 | `app/pages/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
 | `app/pages/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
 | `app/pages/3_Help.py` | how to use + DREAD guide with a live worked example | — |
@@ -181,6 +182,11 @@ Requires Python 3.11+ (Streamlit 1.67+ for the UI).
 ```bash
 uv run streamlit run app/streamlit_app.py
 ```
+
+The sidebar lists four pages: **Threat Model Review** (the page described below),
+**SAD Threat Model**, **Control Catalog** and **Help**. Start the app from the
+repository root so Streamlit picks up `.streamlit/config.toml`, which turns off
+Streamlit's anonymous usage statistics and hides the *Deploy* button.
 
 1. Pick the engine (defaults to **OpenAI / gpt-5.2**) and paste your key, or set
    `OPENAI_API_KEY` in the environment or in `.env`. Set **API base URL** if you go through an

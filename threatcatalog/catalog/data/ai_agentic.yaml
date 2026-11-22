@@ -11,7 +11,7 @@
   assessment_signal: Is agent memory isolated per tenant/session and protected from poisoning?
   threat_frameworks:
   - framework: owasp_asi
-    ref: ASI02:2026
+    ref: ASI06:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 3
@@ -32,7 +32,7 @@
   assessment_signal: Do high-risk agent actions require human approval (HITL)?
   threat_frameworks:
   - framework: owasp_asi
-    ref: ASI06:2026
+    ref: ASI09:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 16
@@ -76,7 +76,7 @@
   assessment_signal: Is a compromised agent contained from cascading across other agents?
   threat_frameworks:
   - framework: owasp_asi
-    ref: ASI09:2026
+    ref: ASI08:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 6
@@ -99,7 +99,7 @@
   assessment_signal: Do agents mutually authenticate before trusting inter-agent messages/instructions?
   threat_frameworks:
   - framework: owasp_asi
-    ref: ASI09:2026
+    ref: ASI07:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 6

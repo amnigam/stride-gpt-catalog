@@ -16,6 +16,7 @@ import streamlit as st
 from threatcatalog.help_example import EXAMPLE_CONTROL_ID, dread_example
 from threatcatalog.llm.prompts import DREAD_ANCHORS
 from threatcatalog.models import ControlStatus, DataClassification
+from threatcatalog.report import READINESS_LEGEND
 
 st.set_page_config(page_title="Help", layout="wide")
 st.title("Help")
@@ -32,7 +33,7 @@ with how_tab:
         "The tool has two ways in. Pick based on what you have for the application:\n\n"
         "- **You have a Solution Architecture Document (SAD)** → use **SAD Threat Model**. "
         "Upload the document and you get an automated report with one confirmation step.\n"
-        "- **You don't have a SAD** → use **Threat Modeling**. Describe the application, "
+        "- **You don't have a SAD** → use **Threat Model Review**. Describe the application, "
         "upload its architecture diagram, review the controls, then run the model.")
 
     left, right = st.columns(2)
@@ -60,8 +61,7 @@ with how_tab:
 
     with right:
         st.subheader("✏️ No SAD: description + diagram")
-        st.page_link("streamlit_app.py", label="Open Threat Modeling", icon="➡️")
-        st.caption("Listed as *streamlit app* in the sidebar.")
+        st.page_link("review.py", label="Open Threat Model Review", icon="➡️")
         st.markdown(
             "1. **Pick the model** in the sidebar. *Deterministic (offline)* needs no key "
             "but cannot read diagrams.\n"
@@ -86,7 +86,7 @@ with how_tab:
     st.subheader("Tips")
     st.markdown(
         "- **Moving from SAD to a human review:** download the declaration JSON from the "
-        "SAD page and load it on the Threat Modeling page (*Load a saved declaration*) to "
+        "SAD page and load it on the Threat Model Review page (*Load a saved declaration*) to "
         "review and correct each control before re-running.\n"
         "- **Save your declaration** between ARB rounds; it reloads exactly as you left it.\n"
         "- **Controls you have that aren't in the catalog** can be listed on the Threat "
@@ -136,6 +136,21 @@ with dread_tab:
     st.caption("The bands are fixed in the app. In the action plan, each action takes the "
                "worst priority of the threats that exploit its controls, and its timing "
                "follows this table. The app sets both from the scores; the model does not.")
+
+    st.subheader("From priorities to Security readiness")
+    st.markdown("The marker on the report's first page is set by a fixed rule, checked in "
+                "this order:")
+    st.table(pd.DataFrame([
+        ("Not ready", "Any Critical finding backed by evidence, or any PCI-mapped control "
+                      "that is not present."),
+        ("Ready with conditions", "Any High finding (a Critical that rests only on the SAD "
+                                  "being silent counts as High), a finding without a DREAD "
+                                  "score, or a control not yet assessed (Unknown)."),
+        ("Ready", "None of the above. Medium and Low gaps remain and are listed in the "
+                  "action plan."),
+    ], columns=["Marker", "When"]), hide_index=True)
+    st.caption("The report prints this explanation under the marker: " + READINESS_LEGEND
+               + " On a SAD run the marker is also tagged Automated draft.")
 
     st.subheader("How the app sets the five scores")
     st.markdown(

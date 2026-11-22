@@ -259,6 +259,13 @@ def _table_markdown(table) -> str:
 # --------------------------------------------------------------------------- #
 # PDF
 # --------------------------------------------------------------------------- #
+# A PDF bullet is extracted as a lone glyph line (often U+F0B7 from the Symbol
+# font) before its text; turn it into a Markdown "- " so the model and the
+# quote check both see ordinary text.
+_PDF_BULLET_LINE = re.compile(r"^[ \t]*[\ue000-\uf8ff\u2022\u2023\u2043\u25aa\u25cf\u25e6\u25a0][ \t]*\n",
+                              re.M)
+
+
 def _extract_pdf(filename: str, data: bytes, max_images: int) -> ExtractedSad:
     try:
         import pymupdf as fitz  # PyMuPDF
@@ -280,7 +287,7 @@ def _extract_pdf(filename: str, data: bytes, max_images: int) -> ExtractedSad:
     parts: list[str] = []
     figure_pages: list[int] = []
     for i, page in enumerate(pdf):
-        text = page.get_text("text").strip()
+        text = _PDF_BULLET_LINE.sub("- ", page.get_text("text")).strip()
         parts.append(f"--- Page {i + 1} ---\n{text}" if text else f"--- Page {i + 1} ---")
         if _pdf_page_has_figure(page):
             figure_pages.append(i)

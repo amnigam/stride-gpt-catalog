@@ -1,0 +1,10 @@
+# Streamlit settings for this app. Streamlit reads this file when it is started
+# from the repository root (`streamlit run app/streamlit_app.py`).
+
+[browser]
+# Do not send anonymous usage statistics to Streamlit.
+gatherUsageStats = false
+
+[client]
+# Hide the "Deploy" button and the developer options in the app menu.
+toolbarMode = "minimal"

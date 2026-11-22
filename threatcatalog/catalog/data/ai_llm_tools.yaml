@@ -15,7 +15,7 @@
     ref: LLM06:2025
     version: '2025'
   - framework: owasp_asi
-    ref: ASI04:2026
+    ref: ASI02:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 16
@@ -82,7 +82,7 @@
     ref: LLM06:2025
     version: '2025'
   - framework: owasp_asi
-    ref: ASI04:2026
+    ref: ASI05:2026
     version: '2026'
   - framework: cis_v8
     ref: Control 4
