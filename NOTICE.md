@@ -16,4 +16,6 @@ No licence is granted by this repository yet; choose one (or mark it internal)
 when the repository is imported into your organisation's source control.
 
 Third-party packages are installed from PyPI under their own licences; see
-`pyproject.toml` and `uv.lock` for the full list.
+`pyproject.toml` and `uv.lock` for the full list. Note that **PyMuPDF** (used
+only to read PDF SADs, `sad` extra) is AGPL-3.0; see "PyMuPDF licence" in the README
+for what works without it and the pdfplumber + pypdfium2 alternative.

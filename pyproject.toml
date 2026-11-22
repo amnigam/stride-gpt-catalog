@@ -13,10 +13,10 @@ dependencies = ["pydantic>=2.5", "PyYAML>=6.0"]
 llm = ["anthropic>=0.39"]
 openai = ["openai>=1.30"]
 bedrock = ["boto3>=1.35"]
-sad = ["python-docx>=1.1", "pymupdf>=1.24", "Pillow>=10.0"]
+sad = ["python-docx>=1.1", "pymupdf>=1.24,<2.0", "Pillow>=10.0"]
 app = ["streamlit>=1.67", "python-docx>=1.1"]
 pdf = ["reportlab>=4.0"]
-dev = ["pytest>=7.4", "reportlab>=4.0", "python-docx>=1.1", "pymupdf>=1.24", "Pillow>=10.0"]
+dev = ["pytest>=7.4", "reportlab>=4.0", "python-docx>=1.1", "pymupdf>=1.24,<2.0", "Pillow>=10.0"]
 
 [project.scripts]
 threatcatalog = "threatcatalog.cli:main"

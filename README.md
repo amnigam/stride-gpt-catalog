@@ -173,6 +173,73 @@ normal AWS chain (`AWS_PROFILE`, `AWS_REGION`, SSO, an instance role); the sideb
 override region and profile.
 Requires Python 3.11+ (Streamlit 1.67+ for the UI).
 
+### Installing behind a corporate proxy
+
+If `uv sync` stalls or fails with timeouts or HTTP 504 while downloading wheels,
+it is usually the proxy, not the package. In order of what usually helps:
+
+```bash
+# 1. give slow downloads more time (default is 30 s per read)
+export UV_HTTP_TIMEOUT=300
+
+# 2. trust the corporate CA that the proxy uses to inspect TLS
+#    (uses the OS certificate store instead of uv's bundled roots)
+uv sync --all-extras --system-certs      # or: export UV_SYSTEM_CERTS=1
+# (uv older than ~0.9 calls this --native-tls / UV_NATIVE_TLS)
+
+# 3. make sure uv goes through the proxy
+export HTTPS_PROXY=http://proxy.example.corp:8080
+export HTTP_PROXY=$HTTPS_PROXY
+export NO_PROXY=localhost,127.0.0.1
+
+# Windows PowerShell: $env:UV_HTTP_TIMEOUT="300"; $env:HTTPS_PROXY="http://proxy.example.corp:8080"
+```
+
+**Using an internal PyPI mirror** (Artifactory, Nexus, Azure Artifacts, CodeArtifact):
+`uv.lock` records the public PyPI download URLs, so pointing uv at a mirror needs a
+re-lock against it:
+
+```bash
+export UV_DEFAULT_INDEX=https://artifactory.example.corp/api/pypi/pypi-remote/simple
+uv lock            # rewrites uv.lock with mirror URLs (same versions where available)
+uv sync --all-extras
+```
+
+Commit the re-locked `uv.lock` only to your organisation's copy of the repository.
+With pip, the equivalent is `pip install --index-url <mirror> -e ".[openai,app,pdf,sad,dev]"`
+(or `PIP_INDEX_URL`).
+
+### Why PyMuPDF is pinned below 2.0
+
+The `sad` and `dev` extras use `pymupdf>=1.24,<2.0` (locked at 1.28.2). PyMuPDF 2.x
+adds heavy new dependencies the app does not use (`pymupdf-layout`, `pymupdf4llm`,
+`onnxruntime`, `networkx`, …) and a much larger wheel (about 68 MB against 25 MB),
+which is what most often times out behind a proxy. Pinning `<2.1` is not enough:
+it resolves to 2.0, which pulls in the same packages.
+
+The app only uses basic PyMuPDF calls (open, page text, image/drawing detection,
+page rendering). On the four sample SAD PDFs, 1.28.2, 2.0 and 2.1 gave identical
+extracted text, diagram pages, rendered page images, quote checks and reports.
+If you change the pin, run `uv lock --upgrade-package pymupdf` (a plain `uv lock`
+may keep an older 1.26.x) and re-run `uv run pytest -q`.
+
+### PyMuPDF licence (AGPL)
+
+PyMuPDF is licensed under the **AGPL-3.0** (or a commercial licence from Artifex).
+Some organisations do not allow AGPL packages. It is only needed to read **PDF**
+SADs on the SAD page: DOCX SADs, uploaded diagram images, the review page, the
+CLI and PDF/Word report export all work without it (install without the `sad`
+extra and add `python-docx` and `Pillow` yourself). If it is blocked, two options:
+
+- Upload SADs as **DOCX** only.
+- Replace it in `threatcatalog/sad_extract.py` (`_extract_pdf`, `_pdf_page_has_figure`)
+  with **pdfplumber** (MIT; text, images and drawing objects per page) plus
+  **pypdfium2** (Apache-2.0/BSD-3; renders diagram pages to images for the model).
+  `pypdf` alone cannot render pages, so it cannot feed diagrams to the model. After
+  a swap, re-check PDF bullet glyphs and hyphenated line breaks against the quote
+  check (`tests/test_pre_import.py`, `tests/test_intake.py`) and the sample PDFs in
+  `testapp/`. Not implemented yet.
+
 ---
 
 ## Quickstart
