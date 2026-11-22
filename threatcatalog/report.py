@@ -879,18 +879,28 @@ def build_info(r: ThreatModelReport) -> list[tuple[str, str]]:
 
 
 def out_of_catalog_rows(r: ThreatModelReport) -> list[str]:
-    """Plain sentences for compensating controls and catalog candidates."""
+    """One plain sentence per control the evidence describes outside the catalog:
+    compensating (also a catalog candidate), candidate only, or already covered by a
+    catalog control (so it neither softens a finding nor becomes a candidate)."""
     out = []
+    comp_names = set()
     for a in r.compensating:
+        comp_names.add(a.observed.name)
         st = ", ".join(stride_label(x) for x in a.stride)
         out.append(f"Compensating: {a.observed.name}" + (f" (addresses {st})" if st else "")
-                   + f". {a.rationale} It softens, but does not close, the related findings.")
+                   + f". {a.rationale} It softens, but does not close, the related findings. "
+                   "Not in the catalog; flagged as a catalog candidate.")
     for c in r.candidates:
+        if c.title in comp_names:
+            continue
         st = ", ".join(stride_label(x) for x in c.stride)
         risk = (f"addresses {st} risk" if st else
                 "the risk it addresses is not mapped to STRIDE yet")
         out.append(f"Candidate: {c.title} ({risk}). Described in the evidence but not in the "
                    f"catalog; it does not offset any finding in this report.")
+    for a in r.covered_elsewhere:
+        out.append(f"Covered by the catalog: {a.observed.name} is part of {a.covered_by}, so it is "
+                   "assessed there and does not offset any other finding.")
     return out
 
 

@@ -59,3 +59,30 @@ def test_compensating_does_not_touch_unrelated_stride(engine, web_llm_profile, t
     attach_compensating(gap, assessments)
     web = next(gi for gi in gap if gi.control.id == "X-WEB-1")
     assert web.compensating_notes == []
+
+
+def test_covered_observed_is_neither_compensating_nor_candidate(web_llm_profile, tiny_controls):
+    """One line per item in the report; a control the catalog already covers is listed
+    as covered, never compensating or a candidate (it would double-count)."""
+    from threatcatalog.generators import DeterministicArtifactEngine
+    from threatcatalog.models import OutOfCatalogAssessment, ThreatModelReport
+    from threatcatalog.report import out_of_catalog_rows
+
+    class Judge(DeterministicArtifactEngine):
+        def judge_out_of_catalog(self, observed, profile, expected=None):
+            covered = tiny_controls[0].id if observed.name == "Idempotent sending" else None
+            return OutOfCatalogAssessment(observed=observed, relevant=True,
+                                          stride=[Stride.DOS], compensating=True,
+                                          covered_by=covered, rationale="caps volume.")
+    obs = [ObservedControl(name="Idempotent sending", description="one SMS per id"),
+           ObservedControl(name="Daily send cap", description="3,000 a day")]
+    assessments, candidates = process_observed(obs, Judge(), web_llm_profile, tiny_controls)
+    assert [c.title for c in candidates] == ["Daily send cap"]
+    r = ThreatModelReport(profile=web_llm_profile, resolved_control_count=0, gap_items=[],
+                          threats=[], dread=[], candidates=candidates,
+                          compensating=[a for a in assessments if a.compensating and not a.covered_by],
+                          covered_elsewhere=[a for a in assessments if a.covered_by])
+    rows = out_of_catalog_rows(r)
+    assert len(rows) == 2
+    assert rows[0].startswith("Compensating: Daily send cap") and "catalog candidate" in rows[0]
+    assert rows[1].startswith("Covered by the catalog: Idempotent sending")

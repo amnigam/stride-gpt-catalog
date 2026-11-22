@@ -180,3 +180,19 @@ def test_ooc_bad_layer_becomes_none(web_llm_profile):
         ObservedControl(name="tok", description="masks pii"), web_llm_profile)
     assert a.suggested_layer is None
     assert a.stride[0].value == "InformationDisclosure"
+
+
+def test_ooc_covered_by_only_accepts_a_candidate_id(tiny_controls, web_llm_profile):
+    """Northfield (2026-11-22): consent and idempotency were listed as out-of-catalog
+    although DATA-PRIV and RES-DEP cover them. The judge names the covering control;
+    an id that is not a candidate is ignored."""
+    obs = ObservedControl(name="Consent-gated reminders", description="only consented patients")
+    cid = tiny_controls[0].id
+    raw = StubRawLLM({"covered_by": cid.lower(), "relevant": True, "stride": [],
+                      "compensating": False, "rationale": "privacy"})
+    eng = LLMArtifactEngine(raw)
+    assert eng.judge_out_of_catalog(obs, web_llm_profile, expected=tiny_controls).covered_by == cid
+    raw2 = StubRawLLM({"covered_by": "NOT-A-REAL-1", "relevant": True, "stride": [],
+                       "compensating": False, "rationale": "x"})
+    assert LLMArtifactEngine(raw2).judge_out_of_catalog(
+        obs, web_llm_profile, expected=tiny_controls).covered_by is None

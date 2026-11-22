@@ -156,7 +156,7 @@ def run(profile: AppProfile,
     gap = build_gap(expected, ledger, profile)
 
     # 4. out-of-catalog: judge, flag candidates, attach compensating notes
-    assessments, candidates = process_observed(ledger.observed_unmatched, engine, profile)
+    assessments, candidates = process_observed(ledger.observed_unmatched, engine, profile, expected)
     attach_compensating(gap, assessments)
 
     # 5. artifacts driven by the gap
@@ -176,7 +176,9 @@ def run(profile: AppProfile,
         clarifications=_clarifications(gap), threats=threats,
         actions=actions, dread=dread, architecture=architecture,
         pci_view=pci_view, candidates=candidates,
-        compensating=[a for a in assessments if a.relevant and a.compensating],
+        compensating=[a for a in assessments
+                      if a.relevant and a.compensating and not a.covered_by],
+        covered_elsewhere=[a for a in assessments if a.covered_by],
         generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         tool_version=__version__, catalog_version=catalog_version(controls),
         description_words=len(description.split()) if description else 0)

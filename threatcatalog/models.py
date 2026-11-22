@@ -301,6 +301,9 @@ class OutOfCatalogAssessment(BaseModel):
     suggested_framework: Optional[str] = None
     suggested_layer: Optional[Layer] = None
     rationale: str = ""
+    # A catalog control that already covers it: then it is neither a compensating
+    # control nor a catalog candidate (it would double-count that control).
+    covered_by: Optional[str] = None
 
 
 class CatalogCandidate(BaseModel):
@@ -504,6 +507,7 @@ class ThreatModelReport(BaseModel):
     pci_view: PciComplianceView = Field(default_factory=lambda: PciComplianceView(in_scope=False))
     candidates: list[CatalogCandidate] = Field(default_factory=list)
     compensating: list[OutOfCatalogAssessment] = Field(default_factory=list)
+    covered_elsewhere: list[OutOfCatalogAssessment] = Field(default_factory=list)
     sad: Optional[SadContext] = None          # set when the report was generated from a SAD
     diagrams_read: list[str] = Field(default_factory=list)     # main page: diagrams Detect read
     diagrams_skipped: list[str] = Field(default_factory=list)  # main page: uploads not read, and why

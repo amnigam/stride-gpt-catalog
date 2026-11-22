@@ -81,8 +81,13 @@ _NOISE = re.compile(r"[\ue000-\uf8ff\u2022\u2023\u2043\u25aa\u25ab\u25cf\u25cb\u
                     r"|^[ \t]*(?:[-*+]|\d{1,2}[.)])[ \t]+", re.M)   # list markers at line start
 
 
+# PDF extraction wraps hyphenated names across lines ("nfp-reminders-\nprod"); a
+# quote has them whole, so the line break after a hyphen is dropped before matching.
+_HYPHEN_WRAP = re.compile(r"(?<=\w)-[ \t]*\n\s*(?=\w)")
+
+
 def _norm(s: str) -> str:
-    s = _NOISE.sub(" ", s)
+    s = _NOISE.sub(" ", _HYPHEN_WRAP.sub("-", s))
     return " ".join(s.lower().replace("\u2019", "'").replace("\u201c", '"')
                     .replace("\u201d", '"').split()).strip(" .\"'\u2026")
 

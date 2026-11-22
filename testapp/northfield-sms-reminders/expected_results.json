@@ -36,9 +36,9 @@
       "evidence": "TLS 1.2+ to SignalPost and Cloud SQL (§5, §10)"
     },
     "LOG-AUD-001": {
-      "sad_status": "partial",
-      "description_status": "partial",
-      "evidence": "Cloud Logging 30 days; not forwarded to a SIEM (§11.1)"
+      "sad_status": "implemented",
+      "description_status": "implemented",
+      "evidence": "Cloud Audit Logs exported to a locked bucket, 400-day retention (§11.1); the missing SIEM and alerting belong to LOG-CORR-001"
     },
     "DATA-CLS-001": {
       "sad_status": "implemented",

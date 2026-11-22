@@ -177,14 +177,22 @@ def dread_prompt(threats, gap, profile, architecture=None) -> tuple[str, str]:
     return system, user
 
 
-def ooc_prompt(observed: ObservedControl, profile) -> tuple[str, str]:
+def ooc_prompt(observed: ObservedControl, profile, expected=None) -> tuple[str, str]:
     system = ("You judge whether an out-of-catalog control is relevant to THIS "
               "threat model and may act as a compensating control. Be strict: a "
               "compensating control softens the risk score of real findings. " + _JSON_RULE)
+    catalog = [{"control_id": c.id, "title": c.title, "signal": c.assessment_signal}
+               for c in expected or []]
     user = (f"{_profile_line(profile)}\nObserved control: "
-            f"{json.dumps({'name': observed.name, 'description': observed.description})}\n\n"
-            'Return a JSON object {"relevant","stride","compensating",'
+            f"{json.dumps({'name': observed.name, 'description': observed.description})}\n"
+            + (f"Catalog controls already assessed for this app (JSON): {json.dumps(catalog)}\n"
+               if catalog else "") + "\n"
+            'Return a JSON object {"covered_by","relevant","stride","compensating",'
             '"suggested_framework","suggested_layer","rationale"}. '
+            "covered_by: the control_id of the catalog control whose title or signal "
+            "covers this observed control, even partly (for example consent handling is "
+            "covered by a privacy control, idempotent retries by a resilience control); "
+            "null only when none does. "
             "stride: ONLY the STRIDE categories the control directly prevents or limits "
             "(may be empty), not ones it merely touches. compensating: true ONLY when it "
             "directly reduces the likelihood or impact of a threat in those categories; a "

@@ -515,6 +515,17 @@ def test_quote_stitched_from_separate_places_is_accepted_sentence_by_sentence():
     assert not quote_in_text("Yes. Maybe.", "Yes. No. Maybe.")
 
 
+def test_pdf_hyphen_line_wrap_does_not_break_quote_check():
+    """Northfield PDF: 'nfp-reminders-\nprod' and a table cell 'signalpost-\napi-key'."""
+    from threatcatalog.intake import quote_in_text
+    text = ("The function runs in its own Google Cloud project, nfp-reminders-\nprod, in London.\n"
+            "Secrets\nSecret Manager secret signalpost-\napi-key\nSignalPost API key")
+    assert quote_in_text("The function runs in its own Google Cloud project, nfp-reminders-prod, "
+                         "in London.", text)
+    assert quote_in_text("Secret Manager secret signalpost-api-key", text)
+    assert not quote_in_text("Secret Manager secret signalpost-prod-key", text)
+
+
 def test_pdf_bullet_lines_become_markdown_bullets():
     from threatcatalog.sad_extract import _PDF_BULLET_LINE
     assert _PDF_BULLET_LINE.sub("- ", "Intro\n\nFirst point.\n  • \nSecond.") == \
@@ -542,3 +553,11 @@ def test_detect_prompts_carry_strictness_quote_and_other_control_rules():
     system, user = prompts.ooc_prompt(ObservedControl(name="Quiet hours", description="x"),
                                       AppProfile(name="A", platforms=[PlatformFacet.CLOUD]))
     assert "Be strict" in system and "is relevant but not compensating" in user
+
+def test_ooc_prompt_lists_catalog_controls_and_asks_for_covered_by(tiny_controls):
+    from threatcatalog.llm import prompts
+    from threatcatalog.models import AppProfile, ObservedControl, PlatformFacet
+    _s, user = prompts.ooc_prompt(ObservedControl(name="Consent", description="x"),
+                                  AppProfile(name="A", platforms=[PlatformFacet.CLOUD]),
+                                  tiny_controls)
+    assert '"covered_by"' in user and tiny_controls[0].id in user and "even partly" in user
