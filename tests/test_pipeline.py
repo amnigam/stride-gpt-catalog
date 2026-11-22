@@ -97,3 +97,19 @@ def test_pipeline_runs_with_no_evidence_at_all():
     report = pipeline.run(profile)
     assert report.threats == []
     assert report.clarifications  # all unknown
+
+
+def test_run_reports_progress_without_changing_the_result():
+    """The review and SAD pages show each step of a run; the callback never alters the report."""
+    from threatcatalog.models import ObservedControl
+    profile = AppProfile(name="P", platforms=[PlatformFacet.WEB], ai_capabilities=[AICapability.NONE],
+                         data_classification=DataClassification.INTERNAL)
+    obs = [ObservedControl(name="Quiet hours", description="No sends overnight")]
+    steps: list[str] = []
+    a = pipeline.run(profile, observed_unmatched=obs, progress=steps.append)
+    b = pipeline.run(profile, observed_unmatched=obs)
+    assert [g.status for g in a.gap_items] == [g.status for g in b.gap_items]
+    assert len(a.threats) == len(b.threats) and len(a.actions) == len(b.actions)
+    text = " | ".join(steps)
+    for word in ("Gap computed", "not in the catalog", "threats", "DREAD", "action plan", "PCI"):
+        assert word in text

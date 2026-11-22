@@ -22,6 +22,7 @@ Run:  streamlit run app/streamlit_app.py
 from __future__ import annotations
 
 import hashlib
+import time
 
 import pandas as pd
 import streamlit as st
@@ -63,6 +64,27 @@ def build_engine(choice: str, model_id: str, api_key: str = "", base_url: str = 
     """Return an ArtifactEngine for the chosen provider, or None for offline."""
     return _factory_build(choice, model_id, api_key=api_key, base_url=base_url,
                           max_tokens=max_tokens, region=aws_region, aws_profile=aws_profile)
+
+
+
+def _elapsed(started: float) -> str:
+    secs = int(time.monotonic() - started)
+    return f"{secs // 60} min {secs % 60} s" if secs >= 60 else f"{secs} s"
+
+
+def _report_files(report):
+    """(report, Word bytes or error, PDF bytes or error). Built once per run, not on every rerun."""
+    try:
+        from threatcatalog.docx_export import render_docx
+        docx_blob = render_docx(report)
+    except Exception as exc:                       # noqa: BLE001 — Word is optional
+        docx_blob = str(exc)
+    try:
+        from threatcatalog.pdf_export import render_pdf
+        pdf_blob = render_pdf(report)
+    except Exception as exc:                       # noqa: BLE001 — PDF is optional
+        pdf_blob = str(exc)
+    return report, docx_blob, pdf_blob
 
 
 ENGINES = ["OpenAI (ChatGPT)", "Anthropic (Claude)", BEDROCK, OFFLINE]
@@ -185,6 +207,7 @@ def _keyword_detect() -> list[LedgerEntry]:
 
 
 if st.button("🔍 Detect controls from diagrams + description"):
+    st.session_state.pop("_detect_warning", None)
     detected: list[LedgerEntry] = []
     st.session_state["_detect_arch"] = None          # a new Detect replaces what the last one read
     st.session_state["_detect_completeness"] = []
@@ -194,10 +217,22 @@ if st.button("🔍 Detect controls from diagrams + description"):
             eng = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
                                max_tokens=max_out_tokens)
             n = len(diagrams)
-            with st.spinner("Reading the description" + (f" and {n} diagram(s)…" if n else "…")):
-                detected = eng.detect_controls(
-                    expected, description,
-                    diagrams=[(d.data, d.media_type, d.label) for d in diagrams])
+            started = time.monotonic()
+            with st.status("Detecting controls…", expanded=True) as det_status:
+                st.write(f"Reading the description" + (f" and {n} diagram(s)" if n else "")
+                         + f" against {len(expected)} expected controls with "
+                         f"{engine_choice} · {model_id}…")
+                st.caption("This is one model call and can take a minute or more.")
+                try:
+                    detected = eng.detect_controls(
+                        expected, description,
+                        diagrams=[(d.data, d.media_type, d.label) for d in diagrams])
+                except Exception:
+                    det_status.update(label=f"Detection failed after {_elapsed(started)}",
+                                      state="error")
+                    raise
+                det_status.update(label=f"Detection finished in {_elapsed(started)}",
+                                  state="complete", expanded=False)
             read = [d.label for d in diagrams]
             # the same call summarised the architecture and scored the completeness
             # checklist: kept for the report (they never change a control)
@@ -205,8 +240,9 @@ if st.button("🔍 Detect controls from diagrams + description"):
             st.session_state["_detect_arch"] = extras.get("architecture")
             st.session_state["_detect_completeness"] = list(extras.get("completeness") or [])
         except Exception as exc:                 # noqa: BLE001 — surface model/auth errors
-            st.warning(f"AI detection failed ({exc}). Fell back to keyword matching on "
-                       "the description.")
+            # shown after the rerun below, so it isn't wiped before anyone can read it
+            st.session_state["_detect_warning"] = (
+                f"AI detection failed ({exc}). Fell back to keyword matching on the description.")
             detected = _keyword_detect()
     else:
         detected = _keyword_detect()
@@ -224,6 +260,8 @@ if st.button("🔍 Detect controls from diagrams + description"):
     st.session_state["decl_ver"] += 1
     st.rerun()
 
+if st.session_state.get("_detect_warning"):
+    st.warning(st.session_state["_detect_warning"])
 _detected = st.session_state.get("_detected", {})
 _loaded = st.session_state.get("_decl_loaded_info")
 if _loaded and not _detected:
@@ -331,6 +369,7 @@ def _declaration_table() -> None:
                     rows.update(loaded)
                     ensure_rows(rows, expected)
                     st.session_state["_decl_loaded"] = digest
+                    st.session_state.pop("_detect_warning", None)
                     st.session_state["_decl_loaded_info"] = {
                         "file": upload.name, "rows": len(loaded),
                         "ai": sum(1 for r in loaded.values() if r.evidence.ai_status is not None)}
@@ -494,36 +533,53 @@ if st.button("Run threat model", type="primary"):
                    "Click Detect first to pull controls from the images.")
     if attention:
         st.toast(f"Running with {len(attention)} control(s) still missing a reviewer note.")
+    st.session_state.pop("report", None)           # never show the last report as if it were this run
+    label = engine_choice if engine_choice == OFFLINE else f"{engine_choice} · {model_id}"
+    started = time.monotonic()
+    status = st.status(f"Running the threat model with {label}…", expanded=True)
     try:
+        status.write(f"Starting {label}…")
         engine = build_engine(engine_choice, model_id, api_key=api_key, base_url=base_url,
                               max_tokens=max_out_tokens)
     except Exception as exc:                       # noqa: BLE001
+        status.update(label="Threat model failed", state="error", expanded=True)
         st.error(f"Could not initialize {engine_choice}: {exc}")
         st.stop()
     try:
-        # diagrams already incorporated via Detect -> declaration; don't re-read them here
-        # threats build on the SAD's architecture (flow 2) or on what Detect read (flow 3)
-        arch = ((_handoff.sad.architecture if (_handoff is not None and _handoff.sad) else None)
-                or st.session_state.get("_detect_arch"))
-        report = pipeline.run(profile, description=description, declared=declared,
-                              observed_unmatched=observed, engine=engine,
-                              controls=catalog.controls, architecture=arch)
-        if _handoff is None:
-            report.input_completeness = list(st.session_state.get("_detect_completeness") or [])
-        if _handoff is not None:   # keep the SAD record, marked as reviewed
-            report.sad = reviewed_sad_context(_handoff, profile,
-                                              st.session_state.get("reviewer"))
-        report.diagrams_read = list(st.session_state.get("_diagrams_read") or [])
-        report.diagrams_skipped = list(st.session_state.get("_diagrams_skipped") or [])
-        report.engine = (engine_choice if engine_choice == "Deterministic (offline)"
-                         else f"{engine_choice} · {model_id}")
+        with status:
+            if engine is not None:
+                st.caption("Each step below is a model call and can take a minute or more.")
+            # diagrams already incorporated via Detect -> declaration; don't re-read them here
+            # threats build on the SAD's architecture (flow 2) or on what Detect read (flow 3)
+            arch = ((_handoff.sad.architecture if (_handoff is not None and _handoff.sad)
+                     else None) or st.session_state.get("_detect_arch"))
+            status.write(f"Using {len(declared)} declared control(s) from the review table.")
+            report = pipeline.run(profile, description=description, declared=declared,
+                                  observed_unmatched=observed, engine=engine,
+                                  controls=catalog.controls, architecture=arch,
+                                  progress=status.write)
+            if _handoff is None:
+                report.input_completeness = list(
+                    st.session_state.get("_detect_completeness") or [])
+            if _handoff is not None:   # keep the SAD record, marked as reviewed
+                report.sad = reviewed_sad_context(_handoff, profile,
+                                                  st.session_state.get("reviewer"))
+            report.diagrams_read = list(st.session_state.get("_diagrams_read") or [])
+            report.diagrams_skipped = list(st.session_state.get("_diagrams_skipped") or [])
+            report.engine = label
+            status.write("Preparing the Word and PDF downloads…")
+            # stash in session_state so downloads survive Streamlit's reruns
+            st.session_state["report"] = report
+            st.session_state["report_label"] = label
+            st.session_state["report_files"] = _report_files(report)
     except Exception as exc:                       # noqa: BLE001
+        status.update(label=f"Threat model failed after {_elapsed(started)}", state="error",
+                      expanded=True)
         st.error(f"Run failed with {engine_choice}: {exc}")
         st.stop()
-    label = engine_choice if engine_choice == "Deterministic (offline)" else f"{engine_choice} · {model_id}"
-    # stash in session_state so downloads survive Streamlit's reruns
-    st.session_state["report"] = report
-    st.session_state["report_label"] = label
+    status.update(label=f"Threat model ready in {_elapsed(started)} — "
+                        f"{len(report.threats)} findings. The report is below.",
+                  state="complete", expanded=False)
 
 # render the latest report (persists across download-button reruns)
 report = st.session_state.get("report")
@@ -533,17 +589,20 @@ if report is not None:
                f"PCI in scope: {report.pci_view.in_scope}")
     fname = report.profile.name.replace(" ", "_")
     md = render_markdown(report)
+    files = st.session_state.get("report_files")
+    if files is None or files[0] is not report:
+        with st.spinner("Preparing the Word and PDF downloads…"):
+            files = st.session_state["report_files"] = _report_files(report)
+    _, docx_blob, pdf_blob = files
     dl1, dl2 = st.columns(2)
-    try:
-        from threatcatalog.docx_export import render_docx
-        dl1.download_button("⬇ Download (Word)", render_docx(report),
+    if isinstance(docx_blob, bytes):
+        dl1.download_button("⬇ Download (Word)", docx_blob,
                             file_name=f"{fname}_threat_model.docx", mime=DOCX_MIME)
-    except Exception as exc:                       # noqa: BLE001 — Word is optional
-        dl1.caption(f"Word export needs python-docx — `pip install python-docx`. ({exc})")
-    try:
-        from threatcatalog.pdf_export import render_pdf
-        dl2.download_button("⬇ Download (PDF)", render_pdf(report),
+    else:
+        dl1.caption(f"Word export needs python-docx — `pip install python-docx`. ({docx_blob})")
+    if isinstance(pdf_blob, bytes):
+        dl2.download_button("⬇ Download (PDF)", pdf_blob,
                             file_name=f"{fname}_threat_model.pdf", mime="application/pdf")
-    except Exception as exc:                       # noqa: BLE001 — PDF is optional
-        dl2.caption(f"PDF export needs reportlab — `pip install reportlab`. ({exc})")
+    else:
+        dl2.caption(f"PDF export needs reportlab — `pip install reportlab`. ({pdf_blob})")
     st.markdown(md)
