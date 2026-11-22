@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("intake", help="path to intake JSON")
     ap.add_argument("--out", help="write Markdown report here (default: stdout)")
     ap.add_argument("--pdf", help="also write a PDF report to this path")
+    ap.add_argument("--docx", help="also write a Word (.docx) report to this path")
     ap.add_argument("--llm", action="store_true", help="use an LLM engine (needs API key)")
     ap.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic",
                     help="which model provider to use with --llm")
@@ -66,6 +67,11 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.pdf, "wb") as fh:
             fh.write(render_pdf(report))
         print(f"wrote {args.pdf}")
+    if args.docx:
+        from .docx_export import render_docx
+        with open(args.docx, "wb") as fh:
+            fh.write(render_docx(report))
+        print(f"wrote {args.docx}")
     if args.out:
         open(args.out, "w").write(md)
         print(f"wrote {args.out} ({len(report.threats)} threats, "

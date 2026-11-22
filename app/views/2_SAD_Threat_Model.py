@@ -9,7 +9,7 @@ SAD threat model — upload a Solution Architecture Document, get a threat model
      its reason, pre-filled. One click to continue.
   4. Run: controls are detected in the text and every diagram; controls the SAD
      does not mention are NOT PRESENT, controls only implied are PARTIAL (to be
-     confirmed). Report downloads as Markdown or PDF, plus the declaration JSON
+     confirmed). Report downloads as Word or PDF, plus the declaration JSON
      that the review page can load for a human pass.
 
 All logic lives in `threatcatalog.sad` / `threatcatalog.sad_extract`.
@@ -33,6 +33,13 @@ from threatcatalog.llm.factory import (ANTHROPIC, BEDROCK, OPENAI, build_engine,
 from threatcatalog.models import (AICapability, AppProfile, DataClassification,  # noqa: E402
                                   FacetReason, PlatformFacet, RubricScore)
 from threatcatalog.report import render_markdown  # noqa: E402
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def feedback_docx() -> bytes:
+    from threatcatalog.docx_export import render_feedback_docx
+    return render_feedback_docx(doc, a)
 from threatcatalog import sad as sadflow  # noqa: E402
 from threatcatalog.sad_extract import SadExtractionError, add_images, extract  # noqa: E402
 
@@ -173,14 +180,13 @@ def completeness_table():
     } for i in a.completeness]), hide_index=True, use_container_width=True)
 
 
-feedback = sadflow.feedback_markdown(doc, a)
 fname = (a.application_name or "SAD").replace(" ", "_")
 if not a.sufficient:
     st.error("**This SAD is not sufficient for a threat model, so no report was produced.**\n\n"
              + "\n".join(f"- {r}" for r in a.stop_reasons))
     completeness_table()
-    st.download_button("⬇ Download SAD feedback for the author (Markdown)", feedback,
-                       file_name=f"{fname}_SAD_feedback.md", mime="text/markdown")
+    st.download_button("⬇ Download SAD feedback for the author (Word)", feedback_docx(),
+                       file_name=f"{fname}_SAD_feedback.docx", mime=DOCX_MIME)
     st.stop()
 
 gaps = a.gaps
@@ -323,8 +329,12 @@ if flagged:
 md = render_markdown(report)
 rname = report.profile.name.replace(" ", "_")
 d1, d2, d3, d4 = st.columns(4)
-d1.download_button("⬇ Report (Markdown)", md, file_name=f"{rname}_threat_model.md",
-                   mime="text/markdown")
+try:
+    from threatcatalog.docx_export import render_docx
+    d1.download_button("⬇ Report (Word)", render_docx(report),
+                       file_name=f"{rname}_threat_model.docx", mime=DOCX_MIME)
+except Exception as exc:  # noqa: BLE001
+    d1.caption(f"Word export needs python-docx — `pip install python-docx`. ({exc})")
 try:
     from threatcatalog.pdf_export import render_pdf
     d2.download_button("⬇ Report (PDF)", render_pdf(report), file_name=f"{rname}_threat_model.pdf",
@@ -338,6 +348,6 @@ d3.download_button("⬇ Declaration (JSON)",
                    help="Load this on the main review page to confirm or correct each control. "
                         "It also carries the confirmed profile and the SAD record, "
                         "so the review page fills itself in.")
-d4.download_button("⬇ SAD feedback (Markdown)", feedback, file_name=f"{fname}_SAD_feedback.md",
-                   mime="text/markdown")
+d4.download_button("⬇ SAD feedback (Word)", feedback_docx(),
+                   file_name=f"{fname}_SAD_feedback.docx", mime=DOCX_MIME)
 st.markdown(md)

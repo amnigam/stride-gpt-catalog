@@ -82,3 +82,37 @@ def test_pdf_cover_has_legend_and_page_break():
     p1, p2 = doc[0].get_text(), doc[1].get_text()
     assert "Security readiness" in p1 and "fixed rule" in p1
     assert "Executive summary" not in p1 and "Executive summary" in p2
+
+
+def test_word_report_has_every_section_and_the_cover_first():
+    docx = pytest.importorskip("docx")
+    import io
+    from threatcatalog.docx_export import render_docx
+    r = _ready_report(partial="DATA-CLS-001")
+    d = docx.Document(io.BytesIO(render_docx(r)))
+    text = [p.text for p in d.paragraphs]
+    joined = "\n".join(text)
+    for heading in ("Key focus items", "Executive summary", "Assessment basis", "Findings register",
+                    "Threat model", "DREAD scoring", "Action plan", "PCI DSS v4.0.1 compliance view"):
+        assert heading in joined, heading
+    assert joined.index("Key focus items") < joined.index("Executive summary")
+    cells = "\n".join(c.text for t in d.tables for row in t.rows for c in row.cells)
+    assert "Security readiness: Ready" in cells and "DATA-CLS-001" in cells
+    assert "Business risk owner" in cells
+    assert d.core_properties.title == "Threat Model — Onprem Job"
+
+
+def test_sad_feedback_as_word():
+    docx = pytest.importorskip("docx")
+    import io
+    from pathlib import Path
+    from threatcatalog import sad as sadflow
+    from threatcatalog.docx_export import render_feedback_docx
+    from threatcatalog.sad_extract import extract
+    p = Path(__file__).resolve().parents[1] / "testapp/corvane-supplier-hub/" \
+        "Corvane_SupplierHub_SAD_v0.1_DRAFT_incomplete.docx"
+    sad = extract(p.name, p.read_bytes())
+    a = sadflow.parse_assessment({"rubric": []}, sad)
+    d = docx.Document(io.BytesIO(render_feedback_docx(sad, a)))
+    joined = "\n".join(x.text for x in d.paragraphs)
+    assert "Result: not enough to threat model" in joined and "Completeness checklist" in joined

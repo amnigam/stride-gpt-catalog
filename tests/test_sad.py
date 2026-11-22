@@ -301,6 +301,14 @@ def test_end_to_end_run_on_stub(catalog):
     pytest.importorskip("reportlab")
     from threatcatalog.pdf_export import render_pdf
     assert render_pdf(report)[:4] == b"%PDF"
+    # the Word report carries the SAD basis and the evidence cards too
+    import io
+    from threatcatalog.docx_export import render_docx
+    d = docx.Document(io.BytesIO(render_docx(report)))
+    text = "\n".join(p.text for p in d.paragraphs)
+    cells = "\n".join(c.text for t in d.tables for row in t.rows for c in row.cells)
+    assert "Assessment basis (SAD)" in text and "control evidence" in text
+    assert "Automated draft from SAD." in text and "Covers transport only" in cells
 
 
 def test_sad_declaration_hands_profile_and_record_to_review_page(catalog):

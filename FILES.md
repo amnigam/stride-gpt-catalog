@@ -40,8 +40,9 @@ isn't part of the project — delete it.
 | `llm/prompts.py` | Prompt builders (serialize the gap; vision prompt; injection hygiene baked in). |
 | `llm/engine.py` | `LLMArtifactEngine` — model path, with the normalization layer that tolerates real-model JSON drift. |
 | `pipeline.py` | Orchestration: profile + evidence → `ThreatModelReport`. |
-| `report.py` | Renders a report to Markdown; shared executive-summary facts. |
+| `report.py` | The shared report facts (cover, summary, register, evidence) read by the Word and PDF renderers, plus a Markdown rendering used on screen, by the CLI and by the tests. |
 | `references.py` | The frameworks and standards the catalog maps to (name, version, official source, control counts), for the Help page. |
+| `docx_export.py` | Renders the report to Word (.docx) with python-docx: same sections, order and colours as the PDF; also the SAD feedback checklist. |
 | `pdf_export.py` | Renders the report to a PDF (reportlab; optional `[pdf]` extra). |
 | `cli.py` | `python -m threatcatalog.cli intake.json --out report.md` (`--provider`, `--model`, `--llm`). |
 
@@ -60,4 +61,4 @@ isn't part of the project — delete it.
 | `examples/peopledesk_report.md` | A sample generated report (offline engine). |
 
 ## Tests (`tests/`)
-One file per engine area; 239 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.
+One file per engine area; 241 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.

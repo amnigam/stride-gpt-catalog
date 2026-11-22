@@ -24,7 +24,7 @@ For a given application it yields, in one pass:
 - a **PCI DSS v4.0.1** exposure view, produced from the same analysis;
 - **framework lineage** on every control — OWASP (**LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8.1** (the Help page's References tab lists them all, with links);
 - a browsable, filterable **Control Catalog reference page** for the teams being assessed;
-- the whole report as **Markdown and PDF**.
+- the whole report as **Word (.docx) and PDF**, with the same sections and colours in both (the app also shows it on screen).
 
 It shifts threat modeling from an ad-hoc, expert-dependent exercise to a
 repeatable, standards-anchored assessment that tells you where each application
@@ -165,7 +165,7 @@ shell always wins over the file.
 
 Extras: `openai` (ChatGPT engine, the default), `llm` (Anthropic engine),
 `bedrock` (AWS Bedrock engine via boto3), `sad` (DOCX/PDF reading for the SAD page),
-`app` (Streamlit UI), `pdf` (PDF export via reportlab), `dev` (pytest).
+`app` (Streamlit UI and Word export via python-docx), `pdf` (PDF export via reportlab), `dev` (pytest).
 
 **AWS Bedrock.** Pick *AWS Bedrock* as the engine and enter a model or inference-profile
 id from your account (or set `BEDROCK_MODEL_ID`). Credentials and region come from the
@@ -215,7 +215,7 @@ Streamlit's anonymous usage statistics and hides the *Deploy* button.
    the evaluations are automated and may need further AppSec analysis. SAD runs show the
    same cards without the review fields (nobody reviews an automated run).
    Notes on partial / not-present controls are also passed to the threat and DREAD
-   prompts so findings name what is actually missing. Download as **Markdown** or **PDF**.
+   prompts so findings name what is actually missing. Download as **Word** or **PDF**.
 
 The left-nav **Control Catalog** page is a browsable, filterable reference of
 every control with a plain-language description — useful to share with the app
@@ -235,7 +235,7 @@ Solution Architecture Document:
    proposes the application profile, each facet with its reason and a quote. The model
    alone decides the profile (no keyword matching, which misreads sentences such as "has no
    mobile app"); a facet it only infers is included and marked *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
-   components), the page stops** and offers a feedback checklist for the SAD author
+   components), the page stops** and offers a feedback checklist (Word) for the SAD author
    instead of a report.
 3. **Confirm** the profile on one screen: tick or untick facets in the table (the white
    *Include* column is editable; blue columns are the AI's proposal), and set the data
@@ -250,7 +250,7 @@ Solution Architecture Document:
    evidence appendix, and as rows needing a note on the review page); statuses are never
    changed by the check.
    The report opens with an *Assessment basis* section (file hash, engine, profile
-   reasons, completeness, limitations). Download it as **Markdown** or **PDF**, plus the
+   reasons, completeness, limitations). Download it as **Word** or **PDF**, plus the
    **declaration JSON**, which the main page can load for a human review pass.
 
 The output budget on this page defaults to 64,000 tokens because a large SAD on a
@@ -260,8 +260,11 @@ the call is retried at that limit automatically.
 ### CLI (offline, deterministic)
 
 ```bash
-uv run threatcatalog testapp/peopledesk_intake.json --out report.md --pdf report.pdf
+uv run threatcatalog testapp/peopledesk_intake.json --docx report.docx --pdf report.pdf
 ```
+
+`--out report.md` also writes the Markdown text of the report (handy for diffs and
+scripts); without any output flag the Markdown is printed.
 
 Add `--provider openai --model gpt-5.2 --llm` for a model-backed narrative. The
 gap is computed identically; only the prose changes.

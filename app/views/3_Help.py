@@ -32,7 +32,7 @@ how_tab, dread_tab, ref_tab = st.tabs(["How to use", "DREAD scoring", "Reference
 with how_tab:
     st.header("Three ways to produce a threat model")
     st.markdown("Pick the flow that matches what you have for the application. All three "
-                "produce the same report (Markdown or PDF); they differ in where the control "
+                "produce the same report (Word or PDF); they differ in where the control "
                 "statuses come from and who has checked them.")
     st.table(pd.DataFrame([
         ("1 · SAD → automated draft", "A Solution Architecture Document (DOCX, PDF or "
@@ -68,7 +68,7 @@ with how_tab:
         "4. **Confirm the profile** on one screen: tick or untick facets, set the data "
         "classification and PCI scope.\n"
         "5. **Run.** Controls are detected across the text and every diagram, cited quotes "
-        "are checked against the SAD, and the report is built. Download it as Markdown or "
+        "are checked against the SAD, and the report is built. Download it as Word or "
         "PDF, **and download the declaration JSON** if the application will go to review "
         "(flow 2).")
     st.info("Status rules in flow 1: a control the SAD **does not mention is Not present** "
@@ -111,7 +111,7 @@ with how_tab:
         "5. **Review the declaration** as in flow 2. Use *Find control* to jump to a "
         "control by ID or name (e.g. CORS); *Control details* under the table explains "
         "what each control covers and what to check.\n"
-        "6. **Run threat model** and download the report as Markdown or PDF.")
+        "6. **Run threat model** and download the report as Word or PDF.")
     st.info("In flow 3 a control the AI finds no evidence for stays **Unknown**, not "
             "missing. Unknowns are open questions for the team rather than findings, and "
             "they keep the readiness marker at *Ready with conditions* until resolved.")

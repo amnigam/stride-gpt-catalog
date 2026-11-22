@@ -47,6 +47,8 @@ from threatcatalog.models import (AICapability, AppProfile, CompletenessItem,
                                   DataClassification, LedgerEntry,
                                   ObservedControl, PlatformFacet)
 from threatcatalog.report import render_markdown
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 from threatcatalog.sad_extract import MAX_IMAGES, prepare_diagrams
 
 st.set_page_config(page_title="Threat Model Review", layout="wide")
@@ -532,8 +534,12 @@ if report is not None:
     fname = report.profile.name.replace(" ", "_")
     md = render_markdown(report)
     dl1, dl2 = st.columns(2)
-    dl1.download_button("⬇ Download (Markdown)", md, file_name=f"{fname}_threat_model.md",
-                        mime="text/markdown")
+    try:
+        from threatcatalog.docx_export import render_docx
+        dl1.download_button("⬇ Download (Word)", render_docx(report),
+                            file_name=f"{fname}_threat_model.docx", mime=DOCX_MIME)
+    except Exception as exc:                       # noqa: BLE001 — Word is optional
+        dl1.caption(f"Word export needs python-docx — `pip install python-docx`. ({exc})")
     try:
         from threatcatalog.pdf_export import render_pdf
         dl2.download_button("⬇ Download (PDF)", render_pdf(report),
