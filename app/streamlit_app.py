@@ -13,10 +13,10 @@ st.set_page_config(page_title="Threat Model Review", layout="wide")
 
 nav = st.navigation([
     st.Page("review.py", title="Threat Model Review", icon="🛡️", default=True),
-    st.Page("pages/2_SAD_Threat_Model.py", title="SAD Threat Model", icon="📄",
+    st.Page("views/2_SAD_Threat_Model.py", title="SAD Threat Model", icon="📄",
             url_path="sad-threat-model"),
-    st.Page("pages/1_Control_Catalog.py", title="Control Catalog", icon="📚",
+    st.Page("views/1_Control_Catalog.py", title="Control Catalog", icon="📚",
             url_path="control-catalog"),
-    st.Page("pages/3_Help.py", title="Help", icon="❓", url_path="help"),
+    st.Page("views/3_Help.py", title="Help", icon="❓", url_path="help"),
 ])
 nav.run()

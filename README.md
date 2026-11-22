@@ -22,7 +22,7 @@ For a given application it yields, in one pass:
 - a **system context** (components, entry points, data stores, integrations, data flows, trust boundaries, exposure) read from the SAD or from the description and diagrams, and carried in the declaration JSON;
 - a **threat model** (STRIDE) whose threats name the actor, the entry point or asset and the business impact, with **DREAD** scoring against an anchored rubric (one-line reason per score) and one **action plan** (action, threats closed, controls, priority, before go-live or within 90 days, owner);
 - a **PCI DSS v4.0.1** exposure view, produced from the same analysis;
-- **framework lineage** on every control — OWASP (Web, **LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8**;
+- **framework lineage** on every control — OWASP (**LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8.1** (the Help page's References tab lists them all, with links);
 - a browsable, filterable **Control Catalog reference page** for the teams being assessed;
 - the whole report as **Markdown and PDF**.
 
@@ -118,9 +118,9 @@ output-token budget than a plain web app — see
 | `pdf_export.py` | PDF rendering (reportlab; optional `[pdf]` extra) | ✅ |
 | `app/streamlit_app.py` | UI entry point: registers the pages with their sidebar titles | — |
 | `app/review.py` | **Threat Model Review** page: detect-from-diagram, declare, review a SAD run, run, download | — |
-| `app/pages/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
-| `app/pages/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
-| `app/pages/3_Help.py` | how to use + DREAD guide with a live worked example | — |
+| `app/views/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
+| `app/views/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
+| `app/views/3_Help.py` | how to use (the three flows) + DREAD guide with a live worked example + references | — |
 | `help_example.py` | computes the Help page's worked DREAD example with the real scorer | ✅ |
 
 The model lives behind one protocol (`ArtifactEngine`) with two implementations
@@ -383,7 +383,7 @@ key fails loudly with the file and entry number.
 
 ### Frameworks & versions (pinned, because these move)
 
-OWASP Top 10 (web), **OWASP LLM Top 10 2025**, **OWASP Agentic/ASI Top 10 2026**,
+**OWASP LLM Top 10 2025**, **OWASP Agentic/ASI Top 10 2026**,
 **OWASP MCP Top 10 (BETA — version-pinned, expected to drift)**, **OWASP API
 Security Top 10 2023**, **OWASP Mobile Top 10 2024**, OWASP MASVS, and **CIS
 Controls v8** as a cross-cutting dimension on every control. Methodology: STRIDE

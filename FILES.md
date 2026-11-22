@@ -17,9 +17,9 @@ isn't part of the project — delete it.
 | `.env.example` | Template for a local, git-ignored `.env` holding API keys. |
 | `uv.lock` | Exact versions of every dependency, used by `uv sync`. |
 | `NOTICE.md` | Where the project comes from and its relation to STRIDE-GPT. |
-| `app/pages/2_SAD_Threat_Model.py` | Upload a solution architecture document (DOCX/PDF/MD) → completeness check → confirm profile → automated threat model. |
-| `app/pages/1_Control_Catalog.py` | Reference page (sidebar nav) — browsable/filterable description of every control, generated from the catalog; exportable to Markdown. |
-| `app/pages/3_Help.py` | Help: which page to use (SAD vs description + diagram) and the DREAD scoring guide with a worked example computed by the real scorer (`threatcatalog/help_example.py`). |
+| `app/views/2_SAD_Threat_Model.py` | Upload a solution architecture document (DOCX/PDF/MD) → completeness check → confirm profile → automated threat model. |
+| `app/views/1_Control_Catalog.py` | Reference page (sidebar nav) — browsable/filterable description of every control, generated from the catalog; exportable to Markdown. |
+| `app/views/3_Help.py` | Help: the three flows (SAD draft, SAD review, description + diagrams), the References tab (frameworks, versions, sources, control counts from `threatcatalog/references.py`) and the DREAD scoring guide with a worked example computed by the real scorer (`threatcatalog/help_example.py`). |
 
 ## The engine (`threatcatalog/`)
 | Path | What it is |
@@ -41,6 +41,7 @@ isn't part of the project — delete it.
 | `llm/engine.py` | `LLMArtifactEngine` — model path, with the normalization layer that tolerates real-model JSON drift. |
 | `pipeline.py` | Orchestration: profile + evidence → `ThreatModelReport`. |
 | `report.py` | Renders a report to Markdown; shared executive-summary facts. |
+| `references.py` | The frameworks and standards the catalog maps to (name, version, official source, control counts), for the Help page. |
 | `pdf_export.py` | Renders the report to a PDF (reportlab; optional `[pdf]` extra). |
 | `cli.py` | `python -m threatcatalog.cli intake.json --out report.md` (`--provider`, `--model`, `--llm`). |
 
@@ -59,4 +60,4 @@ isn't part of the project — delete it.
 | `examples/peopledesk_report.md` | A sample generated report (offline engine). |
 
 ## Tests (`tests/`)
-One file per engine area; 237 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.
+One file per engine area; 239 tests, all offline (`test_samples.py` checks the four sample apps and their answer keys). Run with `pytest -q`.
