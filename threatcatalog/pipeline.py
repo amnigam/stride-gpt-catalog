@@ -139,7 +139,11 @@ def run(profile: AppProfile,
         controls: list[Control] | None = None,
         diagram_image: bytes | None = None,
         diagram_media_type: str = "image/png",
-        architecture: ArchitectureSummary | None = None) -> ThreatModelReport:
+        architecture: ArchitectureSummary | None = None,
+        progress=None) -> ThreatModelReport:
+    """`progress(msg)`, when given, is called before each step so a UI can show
+    where a long run is. It never changes the result."""
+    say = progress or (lambda _m: None)
     engine = engine or DeterministicArtifactEngine()
     controls = controls if controls is not None else Catalog.load().controls
 
@@ -155,20 +159,30 @@ def run(profile: AppProfile,
     # 3. deterministic gap
     gap = build_gap(expected, ledger, profile)
 
+    weak = sum(1 for g in gap if g.status not in (ControlStatus.IMPLEMENTED,
+                                                ControlStatus.NOT_APPLICABLE))
+    say(f"Gap computed: {weak} of {len(expected)} expected controls are not fully implemented.")
+
     # 4. out-of-catalog: judge, flag candidates, attach compensating notes
+    if ledger.observed_unmatched:
+        say(f"Judging {len(ledger.observed_unmatched)} control(s) not in the catalog…")
     assessments, candidates = process_observed(ledger.observed_unmatched, engine, profile, expected)
     attach_compensating(gap, assessments)
 
     # 5. artifacts driven by the gap
     #    (the architecture summary, when there is one, makes them specific to this system;
     #    every finding is still covered by a threat and an action, so nothing is dropped)
+    say("Generating threats for each gap…")
     threats = _cover_threats(engine.generate_threats(gap, profile, architecture), gap, profile)
+    say(f"Scoring {len(threats)} threat(s) with DREAD…")
     dread = _cover_dread(engine.score_dread(threats, gap, profile, architecture),
                          threats, gap, profile)
+    say("Building the action plan…")
     actions = _cover_actions(engine.generate_action_plan(threats, gap, profile, dread,
                                                          architecture), gap, threats, dread)
 
     # 6. compliance pass (deterministic second read off the same gap)
+    say("Running the PCI compliance pass and assembling the report…")
     pci_view = build_pci_view(gap, profile)
 
     return ThreatModelReport(
