@@ -5,7 +5,7 @@ threatcatalog.gap
 The deterministic core. Given the expected control set and the implemented
 ledger, compute one `GapItem` per expected control. This is *code*, not an LLM
 call — which is exactly what makes the whole tool auditable. Everything
-downstream (threats, recommendations, mitigations, DREAD, PCI) reasons *over*
+downstream (threats, DREAD, the action plan, PCI) reasons *over*
 this computed gap; nothing guesses what is missing.
 
 Two rules are load-bearing here:

@@ -24,6 +24,8 @@ pipeline runs without it.
 
 from __future__ import annotations
 
+import re
+
 from .models import (Confidence, Control, ControlEvidence, ControlStatus, ImplementedLedger,
                      LedgerEntry, ObservedControl, Provenance)
 
@@ -71,7 +73,16 @@ def _sentence_with(text: str, kw: str, limit: int = 240) -> str:
     return s if len(s) <= limit else s[:limit - 1] + "\u2026"
 
 
+# Bullet glyphs (PDF Symbol/Wingdings bullets come through as Private Use Area
+# characters such as U+F0B7) and page markers sit between sentences in an
+# extracted SAD but never in a quote, so they must not break the match.
+_NOISE = re.compile(r"[\ue000-\uf8ff\u2022\u2023\u2043\u25aa\u25ab\u25cf\u25cb\u25e6\u25a0\u25a1]"
+                    r"|--- Page \d+ ---"
+                    r"|^[ \t]*(?:[-*+]|\d{1,2}[.)])[ \t]+", re.M)   # list markers at line start
+
+
 def _norm(s: str) -> str:
+    s = _NOISE.sub(" ", s)
     return " ".join(s.lower().replace("\u2019", "'").replace("\u201c", '"')
                     .replace("\u201d", '"').split()).strip(" .\"'\u2026")
 

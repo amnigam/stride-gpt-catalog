@@ -301,6 +301,14 @@ def test_end_to_end_run_on_stub(catalog):
     pytest.importorskip("reportlab")
     from threatcatalog.pdf_export import render_pdf
     assert render_pdf(report)[:4] == b"%PDF"
+    # the Word report carries the SAD basis and the evidence cards too
+    import io
+    from threatcatalog.docx_export import render_docx
+    d = docx.Document(io.BytesIO(render_docx(report)))
+    text = "\n".join(p.text for p in d.paragraphs)
+    cells = "\n".join(c.text for t in d.tables for row in t.rows for c in row.cells)
+    assert "Assessment basis (SAD)" in text and "control evidence" in text
+    assert "Automated draft from SAD." in text and "Covers transport only" in cells
 
 
 def test_sad_declaration_hands_profile_and_record_to_review_page(catalog):
@@ -472,3 +480,31 @@ def test_unsupported_quote_asks_for_a_reviewer_note():
     assert "does not clearly support" in needs_note(row)
     row.evidence.reviewed = True
     assert needs_note(row) is None
+
+
+def test_pdf_bullet_glyphs_do_not_break_quote_check():
+    """Amit's Marlowe run (2026-11-22): a quote spanning two PDF bullets was
+    reported 'not found verbatim' because of the U+F0B7 bullet glyph between them."""
+    from threatcatalog.intake import quote_in_text
+    text = ("--- Page 6 ---\n11.1 Logging\n- Logs go to Splunk. There are no \n"
+            "Splunk alerts for this app.\n\nA failed run triggers an e-mail.\n"
+            "--- Page 7 ---\nVeeam backs up • both VMs.")
+    q = "There are no Splunk alerts for this app. A failed run triggers an e-mail."
+    assert quote_in_text(q, text)
+    assert quote_in_text("A failed run triggers an e-mail. Veeam backs up both VMs", text)
+    # reordered or invented text is still caught
+    assert not quote_in_text("A failed run triggers an e-mail. There are no Splunk alerts for this app.", text)
+    assert not quote_in_text("Splunk alerts are configured for this app.", text)
+
+
+def test_pdf_bullet_lines_become_markdown_bullets():
+    from threatcatalog.sad_extract import _PDF_BULLET_LINE
+    assert _PDF_BULLET_LINE.sub("- ", "Intro\n\nFirst point.\n  • \nSecond.") == \
+        "Intro\n- First point.\n- Second."
+
+
+def test_markdown_list_markers_do_not_break_quote_check():
+    from threatcatalog.intake import quote_in_text
+    text = "Logging\n- Logs go to Splunk.\n- There are no alerts.\n1. Backups run nightly.\nUse e-mail - not chat."
+    assert quote_in_text("Logs go to Splunk. There are no alerts. Backups run nightly.", text)
+    assert quote_in_text("Use e-mail - not chat", text)

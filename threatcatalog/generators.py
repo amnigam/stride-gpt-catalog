@@ -2,8 +2,8 @@
 threatcatalog.generators
 ========================
 
-The LLM boundary, abstracted. Everything that *reasons* (threats, recs,
-mitigations, DREAD, the out-of-catalog relevance judgement, diagram vision)
+The LLM boundary, abstracted. Everything that *reasons* (threats, DREAD,
+the action plan, the out-of-catalog relevance judgement, diagram vision)
 sits behind the `ArtifactEngine` protocol. Two implementations:
 
 * `DeterministicArtifactEngine` (this file) derives artifacts from the computed

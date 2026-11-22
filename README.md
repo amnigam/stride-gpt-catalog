@@ -22,9 +22,9 @@ For a given application it yields, in one pass:
 - a **system context** (components, entry points, data stores, integrations, data flows, trust boundaries, exposure) read from the SAD or from the description and diagrams, and carried in the declaration JSON;
 - a **threat model** (STRIDE) whose threats name the actor, the entry point or asset and the business impact, with **DREAD** scoring against an anchored rubric (one-line reason per score) and one **action plan** (action, threats closed, controls, priority, before go-live or within 90 days, owner);
 - a **PCI DSS v4.0.1** exposure view, produced from the same analysis;
-- **framework lineage** on every control — OWASP (Web, **LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8**;
+- **framework lineage** on every control — OWASP (**LLM 2025**, **Agentic/ASI 2026**, **MCP beta**, **API 2023**, **Mobile 2024**, MASVS) and **CIS Controls v8.1** (the Help page's References tab lists them all, with links);
 - a browsable, filterable **Control Catalog reference page** for the teams being assessed;
-- the whole report as **Markdown and PDF**.
+- the whole report as **Word (.docx) and PDF**, with the same sections and colours in both (the app also shows it on screen).
 
 It shifts threat modeling from an ad-hoc, expert-dependent exercise to a
 repeatable, standards-anchored assessment that tells you where each application
@@ -96,7 +96,7 @@ output-token budget than a plain web app — see
 ```
   facets ─► resolve ─► expected controls ┐
                                          ├─► gap engine ─► exec summary / threats /
-  diagram + description + declaration ───┘   (deterministic)  recs / mitigations / DREAD
+  diagram + description + declaration ───┘   (deterministic)  DREAD / action plan
                                                            └─► PCI DSS v4.0.1 view
               out-of-catalog controls ──► judge ──► compensating + catalog candidates
 ```
@@ -116,10 +116,11 @@ output-token budget than a plain web app — see
 | `pipeline.py` | orchestration → `ThreatModelReport` | ✅ |
 | `report.py` | Markdown rendering + shared executive-summary facts | ✅ |
 | `pdf_export.py` | PDF rendering (reportlab; optional `[pdf]` extra) | ✅ |
-| `app/streamlit_app.py` | UI: detect-from-diagram, declare, run, download | — |
-| `app/pages/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
-| `app/pages/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
-| `app/pages/3_Help.py` | how to use + DREAD guide with a live worked example | — |
+| `app/streamlit_app.py` | UI entry point: registers the pages with their sidebar titles | — |
+| `app/review.py` | **Threat Model Review** page: detect-from-diagram, declare, review a SAD run, run, download | — |
+| `app/views/1_Control_Catalog.py` | browsable control reference (generated from the catalog) | — |
+| `app/views/2_SAD_Threat_Model.py` | SAD upload → automated threat model | — |
+| `app/views/3_Help.py` | how to use (the three flows) + DREAD guide with a live worked example + references | — |
 | `help_example.py` | computes the Help page's worked DREAD example with the real scorer | ✅ |
 
 The model lives behind one protocol (`ArtifactEngine`) with two implementations
@@ -164,7 +165,7 @@ shell always wins over the file.
 
 Extras: `openai` (ChatGPT engine, the default), `llm` (Anthropic engine),
 `bedrock` (AWS Bedrock engine via boto3), `sad` (DOCX/PDF reading for the SAD page),
-`app` (Streamlit UI), `pdf` (PDF export via reportlab), `dev` (pytest).
+`app` (Streamlit UI and Word export via python-docx), `pdf` (PDF export via reportlab), `dev` (pytest).
 
 **AWS Bedrock.** Pick *AWS Bedrock* as the engine and enter a model or inference-profile
 id from your account (or set `BEDROCK_MODEL_ID`). Credentials and region come from the
@@ -181,6 +182,11 @@ Requires Python 3.11+ (Streamlit 1.67+ for the UI).
 ```bash
 uv run streamlit run app/streamlit_app.py
 ```
+
+The sidebar lists four pages: **Threat Model Review** (the page described below),
+**SAD Threat Model**, **Control Catalog** and **Help**. Start the app from the
+repository root so Streamlit picks up `.streamlit/config.toml`, which turns off
+Streamlit's anonymous usage statistics and hides the *Deploy* button.
 
 1. Pick the engine (defaults to **OpenAI / gpt-5.2**) and paste your key, or set
    `OPENAI_API_KEY` in the environment or in `.env`. Set **API base URL** if you go through an
@@ -209,7 +215,7 @@ uv run streamlit run app/streamlit_app.py
    the evaluations are automated and may need further AppSec analysis. SAD runs show the
    same cards without the review fields (nobody reviews an automated run).
    Notes on partial / not-present controls are also passed to the threat and DREAD
-   prompts so findings name what is actually missing. Download as **Markdown** or **PDF**.
+   prompts so findings name what is actually missing. Download as **Word** or **PDF**.
 
 The left-nav **Control Catalog** page is a browsable, filterable reference of
 every control with a plain-language description — useful to share with the app
@@ -229,7 +235,7 @@ Solution Architecture Document:
    proposes the application profile, each facet with its reason and a quote. The model
    alone decides the profile (no keyword matching, which misreads sentences such as "has no
    mobile app"); a facet it only infers is included and marked *assumed*. **If a required item is missing (purpose, an architecture diagram, or the
-   components), the page stops** and offers a feedback checklist for the SAD author
+   components), the page stops** and offers a feedback checklist (Word) for the SAD author
    instead of a report.
 3. **Confirm** the profile on one screen: tick or untick facets in the table (the white
    *Include* column is editable; blue columns are the AI's proposal), and set the data
@@ -244,7 +250,7 @@ Solution Architecture Document:
    evidence appendix, and as rows needing a note on the review page); statuses are never
    changed by the check.
    The report opens with an *Assessment basis* section (file hash, engine, profile
-   reasons, completeness, limitations). Download it as **Markdown** or **PDF**, plus the
+   reasons, completeness, limitations). Download it as **Word** or **PDF**, plus the
    **declaration JSON**, which the main page can load for a human review pass.
 
 The output budget on this page defaults to 64,000 tokens because a large SAD on a
@@ -254,8 +260,11 @@ the call is retried at that limit automatically.
 ### CLI (offline, deterministic)
 
 ```bash
-uv run threatcatalog testapp/peopledesk_intake.json --out report.md --pdf report.pdf
+uv run threatcatalog testapp/peopledesk_intake.json --docx report.docx --pdf report.pdf
 ```
+
+`--out report.md` also writes the Markdown text of the report (handy for diffs and
+scripts); without any output flag the Markdown is printed.
 
 Add `--provider openai --model gpt-5.2 --llm` for a model-backed narrative. The
 gap is computed identically; only the prose changes.
@@ -377,7 +386,7 @@ key fails loudly with the file and entry number.
 
 ### Frameworks & versions (pinned, because these move)
 
-OWASP Top 10 (web), **OWASP LLM Top 10 2025**, **OWASP Agentic/ASI Top 10 2026**,
+**OWASP LLM Top 10 2025**, **OWASP Agentic/ASI Top 10 2026**,
 **OWASP MCP Top 10 (BETA — version-pinned, expected to drift)**, **OWASP API
 Security Top 10 2023**, **OWASP Mobile Top 10 2024**, OWASP MASVS, and **CIS
 Controls v8** as a cross-cutting dimension on every control. Methodology: STRIDE

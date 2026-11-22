@@ -15,6 +15,9 @@
   - framework: owasp_llm
     ref: LLM01:2025
     version: '2025'
+  - framework: owasp_asi
+    ref: ASI01:2026
+    version: '2026'
   - framework: cis_v8
     ref: Control 16
     version: '8.1'

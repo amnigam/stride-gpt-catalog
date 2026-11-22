@@ -16,84 +16,118 @@ import streamlit as st
 from threatcatalog.help_example import EXAMPLE_CONTROL_ID, dread_example
 from threatcatalog.llm.prompts import DREAD_ANCHORS
 from threatcatalog.models import ControlStatus, DataClassification
+from threatcatalog.catalog.loader import load_controls
+from threatcatalog.references import CAVEAT, METHODS, framework_rows, pci_row
+from threatcatalog.report import READINESS_LEGEND
 
 st.set_page_config(page_title="Help", layout="wide")
 st.title("Help")
 st.caption("How to run a threat model with this tool, and how its threats are scored.")
 
-how_tab, dread_tab = st.tabs(["How to use", "DREAD scoring"])
+how_tab, dread_tab, ref_tab = st.tabs(["How to use", "DREAD scoring", "References"])
 
 # --------------------------------------------------------------------------- #
-# 1 · How to use
+# 1 · How to use: the three flows
 # --------------------------------------------------------------------------- #
 with how_tab:
-    st.header("Which page should I use?")
+    st.header("Three ways to produce a threat model")
+    st.markdown("Pick the flow that matches what you have for the application. All three "
+                "produce the same report (Word or PDF); they differ in where the control "
+                "statuses come from and who has checked them.")
+    st.table(pd.DataFrame([
+        ("1 · SAD → automated draft", "A Solution Architecture Document (DOCX, PDF or "
+         "Markdown)", "SAD Threat Model", "Not present (SAD silent)",
+         "Automated draft, no person has reviewed it"),
+        ("2 · SAD draft → human review", "The declaration JSON saved by flow 1",
+         "Threat Model Review", "Stays Not present (SAD silent) until a reviewer changes it",
+         "From SAD, then reviewed"),
+        ("3 · Description + diagrams", "A written description and up to 10 architecture "
+         "diagrams", "Threat Model Review", "Unknown: an open question, not a finding",
+         "Reviewed (once the reviewer confirms or edits statuses)"),
+    ], columns=["Flow", "You start with", "Page", "A control the input doesn't mention",
+                "The report says"]), hide_index=True)
+    st.caption("Flow 1 is deliberately strict: whatever the SAD omits is taken as accepted "
+               "by the business. Flows 2 and 3 are where an AppSec reviewer or security "
+               "champion confirms, corrects or relaxes statuses with evidence.")
+
+    st.subheader("📄 Flow 1 · SAD → automated draft")
+    st.page_link("views/2_SAD_Threat_Model.py", label="Open SAD Threat Model", icon="➡️")
     st.markdown(
-        "The tool has two ways in. Pick based on what you have for the application:\n\n"
-        "- **You have a Solution Architecture Document (SAD)** → use **SAD Threat Model**. "
-        "Upload the document and you get an automated report with one confirmation step.\n"
-        "- **You don't have a SAD** → use **Threat Modeling**. Describe the application, "
-        "upload its architecture diagram, review the controls, then run the model.")
+        "**Use it when** the application has a SAD and you want a first, automated read "
+        "before anyone spends review time on it.\n\n"
+        "1. **Pick the model** in the sidebar (AWS Bedrock for confidential documents, "
+        "or OpenAI / Anthropic).\n"
+        "2. **Upload the SAD.** Diagrams inside the document are read automatically; add "
+        "extra diagram images if they live elsewhere. Confirm the document may be sent to "
+        "the selected provider.\n"
+        "3. **Check the SAD.** One call scores it against a 12-item completeness checklist "
+        "and proposes the application profile (platforms, AI use, data classification, "
+        "PCI scope). If purpose, an architecture diagram or the components are missing, "
+        "the page **stops without a report** and gives you a feedback checklist for the "
+        "SAD author.\n"
+        "4. **Confirm the profile** on one screen: tick or untick facets, set the data "
+        "classification and PCI scope.\n"
+        "5. **Run.** Controls are detected across the text and every diagram, cited quotes "
+        "are checked against the SAD, and the report is built. Download it as Word or "
+        "PDF, **and download the declaration JSON** if the application will go to review "
+        "(flow 2).")
+    st.info("Status rules in flow 1: a control the SAD **does not mention is Not present** "
+            "(tagged *SAD silent*); a control the SAD only implies is **Partial** with a "
+            "note to confirm it; a cited quote that is not in the SAD drops the control to "
+            "Partial. The model is told to stay strict: it never marks a control Implemented "
+            "without clear evidence.")
 
-    left, right = st.columns(2)
+    st.subheader("🔁 Flow 2 · SAD draft → human review")
+    st.page_link("review.py", label="Open Threat Model Review", icon="➡️")
+    st.markdown(
+        "**Use it when** a flow-1 draft needs to be confirmed by AppSec or a security "
+        "champion before it goes to the ARB.\n\n"
+        "1. **Enter your name** under *Reviewer* in the sidebar, so every change is "
+        "attributed to you.\n"
+        "2. **Load a saved declaration** and pick the JSON from flow 1. The profile, the "
+        "AI evaluations, their quotes and the SAD record come with it.\n"
+        "3. **Review each control.** Change a status or edit the note to record your own "
+        "evidence, or tick *Reviewed* to confirm the AI evaluation as it is. The AI's "
+        "original evaluation is never overwritten. Rows that need a note are flagged, "
+        "but nothing blocks the run.\n"
+        "4. **Run threat model.** The report keeps the SAD's Assessment basis and is "
+        "labelled *From SAD, then reviewed*. If you change the profile, the report says "
+        "so.")
 
-    with left:
-        st.subheader("📄 I have a SAD")
-        st.page_link("pages/2_SAD_Threat_Model.py", label="Open SAD Threat Model", icon="➡️")
-        st.markdown(
-            "1. **Pick the model** in the sidebar (AWS Bedrock for confidential documents, "
-            "or OpenAI / Anthropic).\n"
-            "2. **Upload the SAD** as DOCX, PDF or Markdown. Diagrams inside the document "
-            "are read automatically; add extra diagram images if they live elsewhere.\n"
-            "3. **Check the SAD.** One click scores it for completeness and proposes the "
-            "application profile (platforms, AI use, data classification, PCI scope). If "
-            "the SAD is missing essentials, the page **stops without a report** and gives "
-            "you a feedback checklist to send to the SAD author.\n"
-            "4. **Confirm the profile.** Each facet shows why it was chosen; adjust if "
-            "needed. This is the only manual step.\n"
-            "5. **Run.** Controls are detected across the text and every diagram, and the "
-            "report is built. Download it as Markdown or PDF, plus the declaration JSON.")
-        st.info("On this page, a control the SAD **does not mention is reported as not "
-                "present**, and a control the SAD only implies is **partial** with a note "
-                "to confirm it. Expect a strict report: it reflects what the document "
-                "actually evidences.")
-
-    with right:
-        st.subheader("✏️ No SAD: description + diagram")
-        st.page_link("streamlit_app.py", label="Open Threat Modeling", icon="➡️")
-        st.caption("Listed as *streamlit app* in the sidebar.")
-        st.markdown(
-            "1. **Pick the model** in the sidebar. *Deterministic (offline)* needs no key "
-            "but cannot read diagrams.\n"
-            "2. **Set the application facets**: name, platforms, AI capability, data "
-            "classification and PCI scope. These decide which controls are expected.\n"
-            "3. **Describe the architecture** in the text box and **upload the diagrams** "
-            "(PNG / JPG, up to 10: context, deployment / network, data flow…).\n"
-            "4. **Detect controls.** The AI reads the description and all the diagrams "
-            "together and "
-            "pre-fills the control declaration, with its reasoning and the sentence or "
-            "diagram element it relied on.\n"
-            "5. **Review the declaration.** Correct statuses, add evidence notes, tick "
-            "*Reviewed* (only the white columns are editable). Use *Find control* to jump to "
-            "one by ID or name (e.g. CORS); *Control details* under the table explains "
-            "what each control covers and what to check. "
-            "Your changes are recorded under your name (set it in the sidebar).\n"
-            "6. **Run threat model** and download the report as Markdown or PDF.")
-        st.info("On this page, a control the AI finds no evidence for stays **unknown**, "
-                "not missing. Unknowns become *clarifications* in the report rather than "
-                "findings, so the reviewer decides.")
+    st.subheader("✏️ Flow 3 · Description + diagrams")
+    st.page_link("review.py", label="Open Threat Model Review", icon="➡️")
+    st.markdown(
+        "**Use it when** there is no SAD, or you are working through the design with the "
+        "application team.\n\n"
+        "1. **Pick the model** in the sidebar. *Deterministic (offline)* needs no key but "
+        "cannot read diagrams.\n"
+        "2. **Set the application facets**: name, platforms, AI capability, data "
+        "classification and PCI scope. These decide which controls are expected.\n"
+        "3. **Describe the architecture** and **upload the diagrams** (PNG / JPG, up to "
+        "10: context, deployment / network, data flow…).\n"
+        "4. **Detect controls.** The AI reads the description and all the diagrams "
+        "together and pre-fills the declaration, with its reasoning and the sentence or "
+        "diagram element it relied on.\n"
+        "5. **Review the declaration** as in flow 2. Use *Find control* to jump to a "
+        "control by ID or name (e.g. CORS); *Control details* under the table explains "
+        "what each control covers and what to check.\n"
+        "6. **Run threat model** and download the report as Word or PDF.")
+    st.info("In flow 3 a control the AI finds no evidence for stays **Unknown**, not "
+            "missing. Unknowns are open questions for the team rather than findings, and "
+            "they keep the readiness marker at *Ready with conditions* until resolved.")
 
     st.subheader("Tips")
     st.markdown(
-        "- **Moving from SAD to a human review:** download the declaration JSON from the "
-        "SAD page and load it on the Threat Modeling page (*Load a saved declaration*) to "
-        "review and correct each control before re-running.\n"
-        "- **Save your declaration** between ARB rounds; it reloads exactly as you left it.\n"
+        "- **Save the declaration (JSON)** between ARB rounds; it reloads exactly as you "
+        "left it, including who reviewed what.\n"
         "- **Controls you have that aren't in the catalog** can be listed on the Threat "
-        "Modeling page. If relevant, they soften the score of related threats as a "
-        "*compensating control* (see DREAD scoring).\n"
-        "- The **Control Catalog** page lists every control the tool checks, with guidance.")
-    st.page_link("pages/1_Control_Catalog.py", label="Open Control Catalog", icon="📚")
+        "Model Review page. If relevant, they soften the score of related threats as a "
+        "*compensating control* (see DREAD scoring); they never close a finding.\n"
+        "- The report's first page carries the **Security readiness** marker; how it is "
+        "set is explained under the marker and in *DREAD scoring*.\n"
+        "- The **Control Catalog** page lists every control the tool checks, with "
+        "guidance you can share with the application team.")
+    st.page_link("views/1_Control_Catalog.py", label="Open Control Catalog", icon="📚")
 
 # --------------------------------------------------------------------------- #
 # 2 · DREAD
@@ -136,6 +170,21 @@ with dread_tab:
     st.caption("The bands are fixed in the app. In the action plan, each action takes the "
                "worst priority of the threats that exploit its controls, and its timing "
                "follows this table. The app sets both from the scores; the model does not.")
+
+    st.subheader("From priorities to Security readiness")
+    st.markdown("The marker on the report's first page is set by a fixed rule, checked in "
+                "this order:")
+    st.table(pd.DataFrame([
+        ("Not ready", "Any Critical finding backed by evidence, or any PCI-mapped control "
+                      "that is not present."),
+        ("Ready with conditions", "Any High finding (a Critical that rests only on the SAD "
+                                  "being silent counts as High), a finding without a DREAD "
+                                  "score, or a control not yet assessed (Unknown)."),
+        ("Ready", "None of the above. Medium and Low gaps remain and are listed in the "
+                  "action plan."),
+    ], columns=["Marker", "When"]), hide_index=True)
+    st.caption("The report prints this explanation under the marker: " + READINESS_LEGEND
+               + " On a SAD run the marker is also tagged Automated draft.")
 
     st.subheader("How the app sets the five scores")
     st.markdown(
@@ -234,3 +283,36 @@ with dread_tab:
         st.metric("DREAD average", t.average, help=f"Priority: {t.priority.value}")
         st.write(f"D {t.damage} · R {t.reproducibility} · E {t.exploitability} · "
                  f"A {t.affected_users} · D {t.discoverability} → **{t.priority.value}**")
+
+
+# --------------------------------------------------------------------------- #
+# 3 · References
+# --------------------------------------------------------------------------- #
+with ref_tab:
+    st.header("Frameworks and standards")
+    st.markdown("Every control in the catalog is mapped to the frameworks below. The "
+                "report shows these references next to each finding. Versions and counts "
+                "are read from the catalog, so this page stays current.")
+    controls = load_controls()
+    fws = framework_rows(controls)
+    pci = pci_row(controls)
+    st.table(pd.DataFrame(
+        [(f["name"], f["version"], f["controls"], f["use"], f["url"]) for f in fws]
+        + [(pci["name"], pci["version"], pci["controls"], pci["use"], pci["url"])],
+        columns=["Framework", "Version", "Controls mapped", "Used for", "Official source"]),
+        hide_index=True)
+    st.warning(CAVEAT)
+
+    st.subheader("Which controls map to each reference")
+    for f in fws + [dict(pci, key="pci")]:
+        with st.expander(f"{f['name']} ({f['version']}): {len(f['refs'])} references, "
+                         f"{f['controls']} controls"):
+            if f["url"]:
+                st.markdown(f"Official source: {f['url']}")
+            st.table(pd.DataFrame([(r, ", ".join(ids)) for r, ids in f["refs"].items()],
+                                  columns=["Reference", "Controls"]), hide_index=True)
+
+    st.subheader("Methods")
+    st.table(pd.DataFrame([(n, d, u or "Defined in this app") for n, d, u in METHODS],
+                          columns=["Method", "How the tool uses it", "Source"]),
+             hide_index=True)

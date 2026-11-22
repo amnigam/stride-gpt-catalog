@@ -26,8 +26,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import (HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate,
-                                Spacer, Table, TableStyle)
+from reportlab.platypus import (HRFlowable, KeepTogether, PageBreak, Paragraph,
+                                SimpleDocTemplate, Spacer, Table, TableStyle)
 
 from .models import ControlStatus, ThreatModelReport
 from .report import (_STATUS_LABEL, EVIDENCE_TITLE, REGISTER_NOTE, action_rows, architecture_rows, basis_facts,
@@ -73,6 +73,7 @@ def _styles():
                           borderPadding=(5, 6, 5, 6), leftIndent=0, keepWithNext=1))
     ss.add(ParagraphStyle("Body", parent=ss["Normal"], fontSize=9.5, leading=14.5,
                           alignment=TA_LEFT, spaceAfter=4))
+    ss.add(ParagraphStyle("Marker", parent=ss["Normal"], fontSize=15, leading=19))
     ss.add(ParagraphStyle("Lead", parent=ss["Normal"], fontSize=9.5, leading=12,
                           textColor=_NAVY, fontName="Helvetica-Bold", spaceBefore=4,
                           spaceAfter=3))
@@ -241,15 +242,19 @@ def _focus_block(r, ss):
     tag = (f' &nbsp;<font color="{_AMBER.hexval()}"><b>{escape(f["tag"])}</b></font>'
            if f["tag"] else "")
     marker = Table([[Paragraph(
-        f'<font color="{col.hexval()}"><b>Security readiness: {escape(f["readiness"])}</b>'
-        f'</font>{tag}<br/><font size="8" color="{_GREY.hexval()}">'
-        f'{escape("; ".join(f["reasons"]).capitalize())}</font>', ss["Body"])]],
+        f'<font size="15" color="{col.hexval()}"><b>Security readiness: '
+        f'{escape(f["readiness"])}</b></font>{tag}', ss["Marker"])],
+        [Paragraph(f'<font size="9" color="{_GREY.hexval()}">'
+                   f'{escape(f["reason_line"])}</font>', ss["Body"])]],
         colWidths=[_CARD_W])
     marker.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), _BAND), ("LINEBEFORE", (0, 0), (0, -1), 3.5, col),
-        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 9)]))
+        ("BACKGROUND", (0, 0), (-1, -1), _BAND), ("LINEBEFORE", (0, 0), (0, -1), 4.5, col),
+        ("TOPPADDING", (0, 0), (-1, 0), 9), ("BOTTOMPADDING", (0, -1), (-1, -1), 8),
+        ("TOPPADDING", (0, 1), (-1, 1), 2), ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+        ("LEFTPADDING", (0, 0), (-1, -1), 11)]))
     el.append(marker)
+    el.append(Spacer(1, 3))
+    el.append(Paragraph(escape(f["legend"]), ss["Meta"]))
     for key, title in (("before_go_live", "Address before go-live"),
                        ("business_risks", "Risks for the business to consider"),
                        ("open_questions", "Open questions for the team")):
@@ -264,9 +269,10 @@ def _focus_block(r, ss):
         if more:
             el.append(Paragraph(f"…and {more} more (see the findings register)", ss["Bull"],
                                 bulletText="\u2022"))
-    el.append(Spacer(1, 4))
-    el.append(_table([["Role", "Name", "Date"]] + [[role, name, ""] for role, name in f["people"]],
-                     [6.0 * cm, 7.5 * cm, 3.0 * cm], ss))
+    el.append(Spacer(1, 6))
+    el.append(KeepTogether([_table([["Role", "Name", "Date"]]
+                                   + [[role, name, ""] for role, name in f["people"]],
+                                   [6.0 * cm, 7.5 * cm, 3.0 * cm], ss)]))
     return el
 
 
@@ -312,17 +318,16 @@ def render_pdf(r: ThreatModelReport) -> bytes:
         el.append(Paragraph(f'<font color="{_AMBER.hexval()}"><b>{escape(banner[0])}'
                             f'</b></font> {escape(banner[1])}', ss["Body"]))
 
-    # ---- summary stat strip ----
+    # ---- cover: key focus items (informs the ARB, never directs it) + sign-off ----
+    el.extend(_focus_block(r, ss))
+    el.append(PageBreak())
+
+    # ---- executive summary: stat strip, then the narrative ----
+    el.append(Paragraph("Executive summary", ss["H2"]))
     el.append(_stat_strip(f["counts"], ss))
     el.append(Spacer(1, 3))
     el.append(Paragraph(escape(tile_legend(r)), ss["Meta"]))
-    el.append(Spacer(1, 4))
-
-    # ---- key focus items: informs the ARB, never directs it ----
-    el.extend(_focus_block(r, ss))
-
-    # ---- executive summary (narrative paragraphs) ----
-    el.append(Paragraph("Executive summary", ss["H2"]))
+    el.append(Spacer(1, 6))
     for para in f["posture"]:
         el.append(Paragraph(escape(para), ss["Body"]))
 
@@ -358,6 +363,7 @@ def render_pdf(r: ThreatModelReport) -> bytes:
     sf = sad_facts(r)
     if sf is not None:
         el.append(Paragraph("Assessment basis (SAD)", ss["H2"]))
+        el.append(Paragraph(escape(sf["rules"]), ss["Body"]))
         el.append(_table([["Item", "Value"]] + [list(x) for x in sf["source"]],
                          [4.0 * cm, 12.5 * cm], ss))
         el.append(Paragraph("Application profile", ss["Lead"]))

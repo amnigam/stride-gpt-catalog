@@ -160,8 +160,12 @@ def test_focus_page_leads_every_flow(catalog, declared_missing_ai, web_llm_profi
         assert "| Business risk owner |" in md
     assert "(Automated draft)" in render_markdown(report)
     assert "(Automated draft)" not in render_markdown(r2)
-    # flow 2: untouched SAD-silent controls are still open questions
-    assert "the SAD does not mention it" in render_markdown(r2)
+    # flow 2: untouched SAD-silent controls still show on the cover, as an open question
+    # or, when already listed as a risk, with their "SAD silent" tag (never twice)
+    cover = render_markdown(r2).split("## Executive summary")[0]
+    assert "the SAD does not mention it" in cover or "SAD silent" in cover
+    ids = [line.split()[1] for line in cover.splitlines() if line.startswith("- ") and "—" in line]
+    assert len(ids) == len(set(ids))
 
 
 # ---------------------------------------------- R9 basis for review page --

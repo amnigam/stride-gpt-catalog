@@ -187,12 +187,11 @@ def sad_banner(r: ThreatModelReport) -> tuple[str, str] | None:
     if r.sad is None:
         return None
     if not r.sad.reviewed:
-        return "Automated draft from SAD.", SAD_RULES_TEXT
+        return ("Automated draft from SAD.",
+                "No person has reviewed it yet; the rules applied are under Assessment basis.")
     who = r.sad.reviewed_by or "a reviewer"
     return ("From SAD, then reviewed.",
-            f"Statuses started from an automated assessment of the SAD and were then "
-            f"reviewed by {who} on the review page. Where the reviewer changed a status or "
-            f"note, the change is shown next to the AI evaluation in the evidence appendix.")
+            f"Reviewed by {who} on the review page; changes are shown in the evidence appendix.")
 
 
 def evidence_note(r: ThreatModelReport) -> str:
@@ -302,7 +301,8 @@ def _humanize_profile(p) -> str:
     plats = _join_natural([_FACET_LABEL.get(f.value, f.value) for f in p.platforms])
     ai = [_AI_LABEL[a.value] for a in p.ai_capabilities if a.value in _AI_LABEL]
     ai_phrase = f" with {_join_natural(ai)}" if ai else ""
-    return (f"{p.name} \u2014 a {plats} application{ai_phrase}, "
+    article = "an" if plats[:1].lower() in "aeiou" else "a"
+    return (f"{p.name} \u2014 {article} {plats} application{ai_phrase}, "
             f"handling data classified as {p.data_classification.value}")
 
 
@@ -487,11 +487,11 @@ def _executive_summary(r: ThreatModelReport) -> list[str]:
     return lines
 
 
+SAD_RULES = ("Controls the SAD does not mention are reported as Not present: whatever the SAD "
+             "omits is taken as accepted by the business. Controls only implied by the SAD are "
+             "reported as Partial and must be confirmed.")
 SAD_RULES_TEXT = ("Automated draft generated from the solution architecture document (SAD); "
-                  "no control status has been reviewed by a person. Controls the SAD does not "
-                  "mention are reported as Not present: whatever the SAD omits is taken as "
-                  "accepted by the business. Controls only implied by the SAD are reported as "
-                  "Partial and must be confirmed.")
+                  "no control status has been reviewed by a person. " + SAD_RULES)
 
 _FACET_SOURCE = {"llm": "AI", "keyword": "Keyword", "llm+keyword": "AI + keyword",
                  "default": "Default", "reviewer": "Reviewer"}
@@ -530,7 +530,9 @@ def sad_facts(r: ThreatModelReport) -> dict | None:
     limitations += [f"Figure not read: {s}" for s in sc.diagrams_skipped]
     if r.architecture is None or r.architecture.empty:
         limitations.append(NO_ARCH_NOTE)
-    return {"rules": SAD_RULES_TEXT, "source": src, "facets": facets,
+    src += build_info(r)
+    rules = SAD_RULES_TEXT if not sc.reviewed else "SAD rules applied: " + SAD_RULES
+    return {"rules": rules, "source": src, "facets": facets,
             "completeness": completeness, "limitations": limitations}
 
 
@@ -572,8 +574,19 @@ def diagrams_line(r: ThreatModelReport) -> str:
 # --------------------------------------------------------------------------- #
 FOCUS_NOTE = ("This page summarises the security findings to inform the Architecture Review "
               "Board. It does not decide the review outcome.")
-FOCUS_LIMIT = 10
+FOCUS_LIMIT = 6        # per list on the cover; the rest are in the findings register
 READY, READY_COND, NOT_READY = "Ready", "Ready with conditions", "Not ready"
+READINESS_LEGEND = (
+    "Security readiness is set by the tool from this report's findings with a fixed rule, not "
+    "by a person. Not ready: an evidence-backed Critical finding, or a PCI-mapped control not "
+    "present. Ready with conditions: a High finding, an unscored finding, or a control not yet "
+    "assessed. Ready: none of these; Medium and Low gaps stay in the action plan. Severity is "
+    "each threat's DREAD score. The marker informs the ARB; it does not decide the outcome.")
+READINESS_LEGEND_DRAFT = " Automated draft: it rests on statuses no person has reviewed."
+
+
+def readiness_legend(r: ThreatModelReport) -> str:
+    return READINESS_LEGEND + (READINESS_LEGEND_DRAFT if automated(r) else "")
 
 
 def focus_items(r: ThreatModelReport) -> dict:
@@ -624,6 +637,8 @@ def focus_items(r: ThreatModelReport) -> dict:
     else:
         readiness = READY
         reasons.append("no Critical or High findings")
+        if findings:
+            reasons.append(f"{len(findings)} Medium/Low gap(s) in the action plan")
 
     def item(g, why):
         return (g.control.id, g.control.title, why)
@@ -647,9 +662,12 @@ def focus_items(r: ThreatModelReport) -> dict:
 
     # SAD-silent and inferred rows keep their tag until a reviewer changes the status,
     # so in a reviewed SAD run (flow 2) the untouched ones are still open questions.
-    questions = [item(g, "the SAD does not mention it") for g in r.gap_items if sad_silent(g)]
-    questions += [item(g, "only implied by the SAD") for g in r.gap_items if sad_inferred(g)]
-    questions += [item(g, "status unknown") for g in unknown]
+    # A control already listed above is not repeated as a question.
+    questions = [item(g, "the SAD does not mention it") for g in r.gap_items
+                 if sad_silent(g) and g.control.id not in seen]
+    questions += [item(g, "only implied by the SAD") for g in r.gap_items
+                  if sad_inferred(g) and g.control.id not in seen]
+    questions += [item(g, "status unknown") for g in unknown if g.control.id not in seen]
 
     def cap(xs):
         return xs[:FOCUS_LIMIT], max(0, len(xs) - FOCUS_LIMIT)
@@ -658,13 +676,18 @@ def focus_items(r: ThreatModelReport) -> dict:
     prepared = (r.sad.profile_confirmed_by if (r.sad and r.sad.profile_confirmed_by) else "")
     return {
         "readiness": readiness, "tag": "Automated draft" if auto else None,
-        "reasons": reasons, "note": FOCUS_NOTE,
+        "reasons": reasons, "reason_line": _sentence("; ".join(reasons)), "note": FOCUS_NOTE, "legend": readiness_legend(r),
         "before_go_live": cap(before), "business_risks": cap(risks),
         "open_questions": cap(questions),
         "people": [("Prepared by", prepared),
                    ("Reviewed by (AppSec / security champion)", ", ".join(names)),
                    ("Business risk owner", "")],
     }
+
+
+def _sentence(s: str) -> str:
+    """Upper-case the first letter only (str.capitalize would turn 'PCI' into 'pci')."""
+    return s[:1].upper() + s[1:]
 
 
 def basis_facts(r: ThreatModelReport) -> dict | None:
@@ -700,6 +723,7 @@ def basis_facts(r: ThreatModelReport) -> dict | None:
                       "the SAD checklist.")
     if r.architecture is None or r.architecture.empty:
         limits.append(NO_ARCH_NOTE)
+    rows += build_info(r)
     return {"rows": rows, "limitations": limits, "completeness": comp}
 
 
@@ -841,6 +865,12 @@ def document_control(r: ThreatModelReport) -> list[tuple[str, str]]:
     if r.generated_at:
         rows.append(("Generated", r.generated_at.replace("T", " ").replace("+00:00", " UTC")))
     rows.append(("Review state", review_state(r)))
+    return rows
+
+
+def build_info(r: ThreatModelReport) -> list[tuple[str, str]]:
+    """Tool and catalog version, shown under Assessment basis (kept off the cover)."""
+    rows = []
     if r.tool_version:
         rows.append(("Tool version", r.tool_version))
     if r.catalog_version:
@@ -881,7 +911,8 @@ def _focus_md(r: ThreatModelReport) -> list[str]:
     f = focus_items(r)
     tag = f" ({f['tag']})" if f["tag"] else ""
     out = ["## Key focus items\n", f"*{f['note']}*\n",
-           f"**Security readiness: {f['readiness']}**{tag} — {'; '.join(f['reasons'])}.\n"]
+           f"### Security readiness: {f['readiness']}{tag}\n",
+           f"{f['reason_line']}.\n", f"*{f['legend']}*\n"]
     for key, title in (("before_go_live", "Address before go-live"),
                        ("business_risks", "Risks for the business to consider"),
                        ("open_questions", "Open questions for the team")):
@@ -937,20 +968,20 @@ def render_markdown(r: ThreatModelReport) -> str:
     if banner:
         out.append(f"> **{banner[0]}** {banner[1]}\n")
 
-    # Headline counts (same numbers as the PDF stat strip)
+    # Key focus items: the cover page, informs the ARB
+    out.extend(_focus_md(r))
+
+    # Executive summary: headline counts (same numbers as the PDF stat strip), then
+    # the deterministic roll-up
+    exec_md = _executive_summary(r)
     c = summary_facts(r)["counts"]
     reviewed = ("Automated draft" if c["reviewed"] is None
                 else f"{c['reviewed']} of {c['expected']}")
-    out.append(f"**Expected** {c['expected']} · **Confirmed in place** {c['implemented']} · "
-               f"**Not present** {c['not_present']} · **Partial** {c['partial']} · "
-               f"**To verify** {c['to_verify']} · **Reviewed** {reviewed}\n")
-    out.append(f"*{tile_legend(r)}*\n")
-
-    # Key focus items: page 1, informs the ARB
-    out.extend(_focus_md(r))
-
-    # Executive summary — deterministic roll-up, first thing a reader sees
-    out.extend(_executive_summary(r))
+    counts = [f"**Expected** {c['expected']} · **Confirmed in place** {c['implemented']} · "
+              f"**Not present** {c['not_present']} · **Partial** {c['partial']} · "
+              f"**To verify** {c['to_verify']} · **Reviewed** {reviewed}\n",
+              f"*{tile_legend(r)}*\n"]
+    out.extend(exec_md[:1] + counts + exec_md[1:])
 
     # Assessment basis: the SAD record, or what a review-page run was built from
     out.extend(_sad_section_md(r))
