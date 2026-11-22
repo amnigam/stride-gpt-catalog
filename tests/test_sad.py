@@ -492,9 +492,27 @@ def test_pdf_bullet_glyphs_do_not_break_quote_check():
     q = "There are no Splunk alerts for this app. A failed run triggers an e-mail."
     assert quote_in_text(q, text)
     assert quote_in_text("A failed run triggers an e-mail. Veeam backs up both VMs", text)
-    # reordered or invented text is still caught
-    assert not quote_in_text("A failed run triggers an e-mail. There are no Splunk alerts for this app.", text)
+    # invented or paraphrased text is still caught
     assert not quote_in_text("Splunk alerts are configured for this app.", text)
+    assert not quote_in_text("A failed run triggers an e-mail. Splunk alerts are configured.", text)
+
+
+def test_quote_stitched_from_separate_places_is_accepted_sentence_by_sentence():
+    """Amit's Northfield run (2026-11-22): the model joined real sentences from
+    different sections into one quote, which was reported 'not found verbatim' and
+    forced to Partial. Every sentence is verbatim, so it is accepted."""
+    from threatcatalog.intake import quote_in_text
+    text = ("### 6.2 Service identities\n\n- sa-reminders is a dedicated service account. It holds "
+            "only Cloud SQL Client.\n\n- sa-scheduler can only invoke the function.\n\n"
+            "## 8 Delivery\nGitHub branch protection requires one approving review.")
+    stitched = ("GitHub branch protection requires one approving review. sa-reminders is a "
+                "dedicated service account. It holds only Cloud SQL Client.")
+    assert quote_in_text(stitched, text)
+    assert quote_in_text("sa-reminders is a dedicated service account … GitHub branch "
+                         "protection requires one approving review.", text)
+    # one invented sentence fails the whole quote; a lone short fragment is not enough
+    assert not quote_in_text(stitched + " Engineers have no standing admin roles.", text)
+    assert not quote_in_text("Yes. Maybe.", "Yes. No. Maybe.")
 
 
 def test_pdf_bullet_lines_become_markdown_bullets():
@@ -508,3 +526,19 @@ def test_markdown_list_markers_do_not_break_quote_check():
     text = "Logging\n- Logs go to Splunk.\n- There are no alerts.\n1. Backups run nightly.\nUse e-mail - not chat."
     assert quote_in_text("Logs go to Splunk. There are no alerts. Backups run nightly.", text)
     assert quote_in_text("Use e-mail - not chat", text)
+
+
+
+def test_detect_prompts_carry_strictness_quote_and_other_control_rules():
+    from threatcatalog.llm import prompts
+    from threatcatalog.models import AppProfile, ObservedControl, PlatformFacet
+    ctl = []
+    _s, sad_user = prompts.sad_detect_prompt(ctl, "text", 0)
+    _s, det_user = prompts.detect_prompt(ctl, "a description")
+    for user in (sad_user, det_user):
+        assert "at most 'partial'" in user and "gap, an exception or a limited scope" in user
+        assert "join the passages with ' … '" in user
+    assert "even partly, it is NOT an other control" in sad_user
+    system, user = prompts.ooc_prompt(ObservedControl(name="Quiet hours", description="x"),
+                                      AppProfile(name="A", platforms=[PlatformFacet.CLOUD]))
+    assert "Be strict" in system and "is relevant but not compensating" in user

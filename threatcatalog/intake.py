@@ -97,9 +97,21 @@ def quote_in_text(quote: str | None, text: str) -> bool:
         return False
     if q in _norm(text):
         return True
+    t = _norm(text)
     # tolerate an elided middle ("... foo ... bar ...") by checking each fragment
     parts = [p for p in (_norm(x) for x in quote.replace("\u2026", "...").split("...")) if len(p) >= 12]
-    return bool(parts) and all(p in _norm(text) for p in parts)
+    if parts and all(p in t for p in parts):
+        return True
+    # A model often joins sentences from different places in the document into one
+    # quote. Accept it when EVERY sentence is verbatim in the text (in any order), so
+    # real evidence is not downgraded; an invented or paraphrased sentence still fails.
+    sentences = [s for s in (_norm(x) for x in _SENTENCE_END.split(quote.replace("\u2026", "...")))
+                 if s]
+    return (len(sentences) > 1 and any(len(s) >= 20 for s in sentences)
+            and all(s in t for s in sentences))
+
+
+_SENTENCE_END = re.compile(r"(?<=[.;!?])\s+|\s*\.\.\.\s*")
 
 
 # Trust ordering — later (higher) wins when both sources speak to a control.
