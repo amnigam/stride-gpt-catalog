@@ -177,14 +177,28 @@ def dread_prompt(threats, gap, profile, architecture=None) -> tuple[str, str]:
     return system, user
 
 
-def ooc_prompt(observed: ObservedControl, profile) -> tuple[str, str]:
+def ooc_prompt(observed: ObservedControl, profile, expected=None) -> tuple[str, str]:
     system = ("You judge whether an out-of-catalog control is relevant to THIS "
-              "threat model and may act as a compensating control. " + _JSON_RULE)
+              "threat model and may act as a compensating control. Be strict: a "
+              "compensating control softens the risk score of real findings. " + _JSON_RULE)
+    catalog = [{"control_id": c.id, "title": c.title, "signal": c.assessment_signal}
+               for c in expected or []]
     user = (f"{_profile_line(profile)}\nObserved control: "
-            f"{json.dumps({'name': observed.name, 'description': observed.description})}\n\n"
-            'Return a JSON object {"relevant","stride","compensating",'
+            f"{json.dumps({'name': observed.name, 'description': observed.description})}\n"
+            + (f"Catalog controls already assessed for this app (JSON): {json.dumps(catalog)}\n"
+               if catalog else "") + "\n"
+            'Return a JSON object {"covered_by","relevant","stride","compensating",'
             '"suggested_framework","suggested_layer","rationale"}. '
-            "stride is a list of STRIDE categories it touches (may be empty).")
+            "covered_by: the control_id of the catalog control whose title or signal "
+            "covers this observed control, even partly (for example consent handling is "
+            "covered by a privacy control, idempotent retries by a resilience control); "
+            "null only when none does. "
+            "stride: ONLY the STRIDE categories the control directly prevents or limits "
+            "(may be empty), not ones it merely touches. compensating: true ONLY when it "
+            "directly reduces the likelihood or impact of a threat in those categories; a "
+            "business rule, schedule or volume limit that only narrows when or how often "
+            "something happens is relevant but not compensating, except for Denial of "
+            "service when it caps resource use.")
     return system, user
 
 
@@ -261,10 +275,11 @@ def detect_prompt(expected, description: str = "", has_diagram: bool = False,
              "controls: ONLY controls with evidence. status is 'implemented' or 'partial'; "
              "confidence is "
              "'low' | 'medium' | 'high'; source is 'description' or 'diagram'. quote: for "
-             "source 'description', copy the supporting sentence VERBATIM from the "
-             "description (no paraphrase); for 'diagram', " + diagram_quote + ". "
+             "source 'description', the supporting sentence from the description; for "
+             "'diagram', " + diagram_quote + ". " + _QUOTE_RULE + " "
              "rationale: at most 40 words on why this evidence supports "
-             "the status, and for 'partial' what is missing.\n" + ARCH_RULES)
+             "the status, and for 'partial' what is missing.\n" + _GAP_RULE + "\n"
+             + ARCH_RULES)
     if rubric:
         user += ("\ncompleteness: score EVERY item of this checklist (JSON) for how well the "
                  "description and diagrams cover it: " + json.dumps(rubric) + ". 'present' = "
@@ -359,6 +374,19 @@ def quote_check_prompt(items: list[dict]) -> tuple[str, str]:
     return system, user
 
 
+_QUOTE_RULE = ("Copy quotes VERBATIM (no paraphrase, no added words). Prefer one contiguous "
+               "passage; if the evidence sits in separate places, join the passages with ' … '.")
+_GAP_RULE = ("Before you report 'implemented', check the WHOLE document (text, tables and "
+             "diagrams) for any statement that the control has a gap, an exception or a "
+             "limited scope (for example people holding broad admin roles, logs that are not "
+             "forwarded, a check that covers only some components). If there is one, the "
+             "status is at most 'partial' and the rationale names the gap.")
+_OTHER_RULE = ("other_controls: security controls the document describes that match NONE of "
+               "the candidates (at most 10), each with a one-sentence description. If any "
+               "candidate's title or signal covers it, even partly, it is NOT an other "
+               "control: use or ignore that candidate instead.")
+
+
 def sad_detect_prompt(expected, text: str, n_images: int,
                       image_labels: list[str] | None = None) -> tuple[str, str]:
     """Detect controls in a SAD. Unlike the review-page Detect, the SAD flow treats
@@ -387,10 +415,10 @@ def sad_detect_prompt(expected, text: str, n_images: int,
              "managed service known to provide it). status 'partial'.\n"
              "- status 'not_present' with basis 'stated': ONLY when the SAD explicitly says "
              "the control is absent, disabled or out of scope.\n"
+             + _GAP_RULE + "\n"
              "source: 'text' or 'diagram'. quote: for 'text', the supporting sentence or table "
-             "row copied VERBATIM; for 'diagram', 'Diagram N: <element or label>'. rationale: "
-             "at most 40 words on why the evidence supports the status; for 'inferred', what "
-             "the inference rests on and what must be confirmed.\n"
-             "other_controls: security controls the SAD describes that match NONE of the "
-             "candidates (at most 10), each with a one-sentence description.")
+             "row; for 'diagram', 'Diagram N: <element or label>'. " + _QUOTE_RULE + " "
+             "rationale: at most 40 words on why the evidence supports the status; for "
+             "'inferred', what the inference rests on and what must be confirmed.\n"
+             + _OTHER_RULE)
     return system, user

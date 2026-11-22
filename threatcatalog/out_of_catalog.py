@@ -18,13 +18,19 @@ from .models import (AppProfile, CatalogCandidate, GapItem,
                      OutOfCatalogAssessment)
 
 
-def process_observed(observed_list, engine: ArtifactEngine, profile: AppProfile
+def process_observed(observed_list, engine: ArtifactEngine, profile: AppProfile,
+                     expected=None
                      ) -> tuple[list[OutOfCatalogAssessment], list[CatalogCandidate]]:
+    """Judge each observed control. One that a catalog control already covers is
+    returned with `covered_by` set and is neither compensating nor a candidate,
+    so it never double-counts that control (it is still listed in the report)."""
     assessments: list[OutOfCatalogAssessment] = []
     candidates: list[CatalogCandidate] = []
     for obs in observed_list:
-        a = engine.judge_out_of_catalog(obs, profile)
+        a = engine.judge_out_of_catalog(obs, profile, expected=expected)
         assessments.append(a)
+        if a.covered_by:
+            continue
         # Always keep for later — the flag plus context IS the mechanism.
         candidates.append(CatalogCandidate(
             title=obs.name, description=obs.description, stride=a.stride,
@@ -37,7 +43,7 @@ def attach_compensating(gap: list[GapItem],
                         assessments: list[OutOfCatalogAssessment]) -> None:
     """Annotate gap items whose STRIDE a relevant compensating control touches.
     The annotation is what `score_dread` later reads to soften the score."""
-    comp = [a for a in assessments if a.relevant and a.compensating]
+    comp = [a for a in assessments if a.relevant and a.compensating and not a.covered_by]
     if not comp:
         return
     for gi in gap:

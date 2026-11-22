@@ -81,8 +81,13 @@ _NOISE = re.compile(r"[\ue000-\uf8ff\u2022\u2023\u2043\u25aa\u25ab\u25cf\u25cb\u
                     r"|^[ \t]*(?:[-*+]|\d{1,2}[.)])[ \t]+", re.M)   # list markers at line start
 
 
+# PDF extraction wraps hyphenated names across lines ("nfp-reminders-\nprod"); a
+# quote has them whole, so the line break after a hyphen is dropped before matching.
+_HYPHEN_WRAP = re.compile(r"(?<=\w)-[ \t]*\n\s*(?=\w)")
+
+
 def _norm(s: str) -> str:
-    s = _NOISE.sub(" ", s)
+    s = _NOISE.sub(" ", _HYPHEN_WRAP.sub("-", s))
     return " ".join(s.lower().replace("\u2019", "'").replace("\u201c", '"')
                     .replace("\u201d", '"').split()).strip(" .\"'\u2026")
 
@@ -97,9 +102,21 @@ def quote_in_text(quote: str | None, text: str) -> bool:
         return False
     if q in _norm(text):
         return True
+    t = _norm(text)
     # tolerate an elided middle ("... foo ... bar ...") by checking each fragment
     parts = [p for p in (_norm(x) for x in quote.replace("\u2026", "...").split("...")) if len(p) >= 12]
-    return bool(parts) and all(p in _norm(text) for p in parts)
+    if parts and all(p in t for p in parts):
+        return True
+    # A model often joins sentences from different places in the document into one
+    # quote. Accept it when EVERY sentence is verbatim in the text (in any order), so
+    # real evidence is not downgraded; an invented or paraphrased sentence still fails.
+    sentences = [s for s in (_norm(x) for x in _SENTENCE_END.split(quote.replace("\u2026", "...")))
+                 if s]
+    return (len(sentences) > 1 and any(len(s) >= 20 for s in sentences)
+            and all(s in t for s in sentences))
+
+
+_SENTENCE_END = re.compile(r"(?<=[.;!?])\s+|\s*\.\.\.\s*")
 
 
 # Trust ordering — later (higher) wins when both sources speak to a control.

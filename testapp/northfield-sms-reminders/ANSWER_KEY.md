@@ -31,8 +31,8 @@ Expected results when this sample is run through the threat modeling utility. LL
 
 | Status | Controls |
 |---|---|
-| implemented | 20 |
-| partial | 12 |
+| implemented | 21 |
+| partial | 11 |
 | partial (inferred, AI note) | 1 |
 | not present (stated) | 4 |
 | not present (not stated) | 5 |
@@ -49,7 +49,7 @@ Description-page column: what Detect should pre-fill from the description text a
 | IAM-LPA-001 | Least-privilege access (RBAC) | base | implemented | implemented | Service account and DB user limited to one view and one insert table (§6.2) |
 | DATA-ENC-001 | Data-at-rest encryption | base | implemented | implemented | Google default encryption at rest (§4.2) |
 | DATA-TLS-001 | Strong transport encryption (TLS 1.2+) | base | implemented | implemented | TLS 1.2+ to SignalPost and Cloud SQL (§5, §10) |
-| LOG-AUD-001 | Centralized audit logging | base | partial | partial | Cloud Logging 30 days; not forwarded to a SIEM (§11.1) |
+| LOG-AUD-001 | Centralized audit logging | base | implemented | implemented | Cloud Audit Logs exported to a locked bucket, 400-day retention (§11.1); the missing SIEM and alerting belong to LOG-CORR-001 |
 | DATA-CLS-001 | Data classification applied | base | implemented | implemented | Classified Northfield Confidential by the DPO (§4.1) |
 | SEC-SECRETS-001 | Secrets management | base | partial | partial | Secret Manager, but the key is also a Cloud Build substitution variable (§8.3) |
 | IN-VAL-001 | Input validation and output encoding | base | partial | partial | Phone numbers validated; first name inserted unchecked (§7) |

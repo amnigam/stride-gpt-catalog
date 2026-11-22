@@ -288,7 +288,7 @@ NORTHFIELD = {
         "IAM-LPA-001": ("I", "T", "Service account and DB user limited to one view and one insert table (§6.2)"),
         "DATA-ENC-001": ("I", "T", "Google default encryption at rest (§4.2)"),
         "DATA-TLS-001": ("I", "T", "TLS 1.2+ to SignalPost and Cloud SQL (§5, §10)"),
-        "LOG-AUD-001": ("P", "T", "Cloud Logging 30 days; not forwarded to a SIEM (§11.1)"),
+        "LOG-AUD-001": ("I", "T", "Cloud Audit Logs exported to a locked bucket, 400-day retention (§11.1); the missing SIEM and alerting belong to LOG-CORR-001"),
         "DATA-CLS-001": ("I", "T", "Classified Northfield Confidential by the DPO (§4.1)"),
         "SEC-SECRETS-001": ("P", "T", "Secret Manager, but the key is also a Cloud Build substitution variable (§8.3)"),
         "IN-VAL-001": ("P", "T", "Phone numbers validated; first name inserted unchecked (§7)"),

@@ -46,8 +46,8 @@ class ArtifactEngine(Protocol):
                              architecture: ArchitectureSummary | None = None) -> list[ActionItem]: ...
     def score_dread(self, threats: list[Threat], gap: list[GapItem], profile: AppProfile,
                     architecture: ArchitectureSummary | None = None) -> list[DreadScore]: ...
-    def judge_out_of_catalog(self, observed: ObservedControl,
-                             profile: AppProfile) -> OutOfCatalogAssessment: ...
+    def judge_out_of_catalog(self, observed: ObservedControl, profile: AppProfile,
+                             expected: list[Control] | None = None) -> OutOfCatalogAssessment: ...
 
 
 def _clamp(n: int) -> int:
@@ -222,8 +222,8 @@ class DeterministicArtifactEngine:
         return scores
 
     # ---- out-of-catalog relevance judgement ----
-    def judge_out_of_catalog(self, observed: ObservedControl,
-                             profile: AppProfile) -> OutOfCatalogAssessment:
+    def judge_out_of_catalog(self, observed: ObservedControl, profile: AppProfile,
+                             expected: list[Control] | None = None) -> OutOfCatalogAssessment:
         text = (observed.name + " " + observed.description).lower()
         stride: list[Stride] = []
         if any(k in text for k in ("token", "mask", "encrypt", "redact", "pii", "tokeniz")):

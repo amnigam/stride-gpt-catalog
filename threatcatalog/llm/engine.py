@@ -367,8 +367,9 @@ class LLMArtifactEngine:
                 out[cid] = (verdict in ("yes", "true"), _as_str(d.get("reason")))
         return out
 
-    def judge_out_of_catalog(self, observed: ObservedControl, profile) -> OutOfCatalogAssessment:
-        system, user = prompts.ooc_prompt(observed, profile)
+    def judge_out_of_catalog(self, observed: ObservedControl, profile,
+                             expected=None) -> OutOfCatalogAssessment:
+        system, user = prompts.ooc_prompt(observed, profile, expected)
         data = self.raw.complete_json(system, user)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -382,4 +383,7 @@ class LLMArtifactEngine:
             "suggested_framework": _as_opt_str(data.get("suggested_framework")),
             "suggested_layer": _coerce_layer(data.get("suggested_layer")),
             "rationale": _as_str(data.get("rationale")),
+            # only a real candidate id counts; anything else is ignored
+            "covered_by": (cov if (cov := (_as_opt_str(data.get("covered_by")) or "").strip().upper())
+                           in {c.id for c in expected or []} else None),
         })
